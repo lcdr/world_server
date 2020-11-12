@@ -1,0 +1,14 @@
+[package]
+name = "world_server"
+version = "0.1.0"
+authors = ["lcdr"]
+edition = "2018"
+license = "AGPL-3.0-or-later"
+repository = "https://github.com/lcdr/world_server/"
+
+[dependencies]
+minreq = { version = "2.1.1", features = ["https"] }
+libsqlite3-sys = { version = "0.9.1", features = ["bundled"] }
+diesel = { version = "1.4.3", features = ["sqlite"] }
+lu_packets = { git = "https://github.com/lcdr/lu_packets", rev = "f11fdd7d50109602f7abdeacf78452376b9adbde" }
+base_server = { git = "https://github.com/lcdr/base_server", rev = "14332d2d18609077cc07f0b52042344182703660" }
