@@ -7,20 +7,26 @@ use diesel::prelude::*;
 use diesel::dsl::{delete, insert_into};
 
 use lu_packets::{
+	lnv,
+	common::ObjId,
 	general::client::DisconnectNotify,
 	world::{Vector3, ZoneId},
-	world::client::{CharListChar, CharacterListResponse, CharacterCreateResponse, CharacterDeleteResponse, InstanceType, LoadStaticZone, Message as OutMessage},
+	world::client::{CharListChar, CharacterListResponse, CharacterCreateResponse, CharacterDeleteResponse, CreateCharacter, InstanceType, LoadStaticZone, Message as OutMessage},
+	world::gm::client::{GameMessage as ClientGM},
+	world::gm::server::{SubjectGameMessage as ServerSGM},
 	world::server::{CharacterCreateRequest, CharacterDeleteRequest, CharacterLoginRequest, ClientValidation, LevelLoadComplete, Message as IncMessage, WorldMessage},
 };
 use lu_packets::common::ServiceId;
 use base_server::listeners::{on_conn_req, on_internal_ping, on_handshake};
 use base_server::server::Context as C;
 
+use crate::game_object::GameObject;
 use crate::models::Character;
-type Context = C<IncMessage, OutMessage>;
+pub type Context = C<IncMessage, OutMessage>;
 
 pub struct MsgCallback {
 	validated: HashMap<SocketAddr, String>,
+	game_objects: HashMap<ObjId, GameObject>,
 	/// Connection to the users DB.
 	conn: SqliteConnection,
 }
@@ -29,7 +35,11 @@ impl MsgCallback {
 	/// Creates a new callback connecting to the DB at the provided path.
 	pub fn new(db_path: &str) -> Self {
 		let conn = SqliteConnection::establish(db_path).unwrap();
-		Self { validated: HashMap::new(), conn }
+		Self {
+			validated: HashMap::new(),
+			game_objects: HashMap::new(),
+			conn,
+		}
 	}
 
 	/// Dispatches to the various handlers depending on message type.
@@ -67,7 +77,7 @@ impl MsgCallback {
 		self.validated.insert(peer_addr, username);
 	}
 
-	pub fn on_restricted_msg(&self, msg: &WorldMessage, ctx: &mut Context) {
+	pub fn on_restricted_msg(&mut self, msg: &WorldMessage, ctx: &mut Context) {
 		dbg!(&msg);
 		let username = match self.validated.get(&ctx.peer_addr().unwrap()) {
 			None =>  {
@@ -85,7 +95,8 @@ impl MsgCallback {
 			CharacterCreateRequest(msg) => self.on_char_create_req(msg, &username, ctx),
 			CharacterLoginRequest(msg)  => self.on_char_login_req(msg, &username, ctx),
 			CharacterDeleteRequest(msg) => self.on_char_del_req(msg, &username, ctx),
-			LevelLoadComplete(msg)      => self.on_level_load_complete(msg, &username, ctx),
+			SubjectGameMessage(msg)     => self.on_subject_game_msg(msg, ctx),
+			LevelLoadComplete(msg)      => self.on_level_load_complete(msg, ctx),
 			_                           => { println!("Unrecognized packet: {:?}", msg); },
 		}
 	}
@@ -109,8 +120,8 @@ impl MsgCallback {
 				legs_color: chara.legs_color as u32,
 				hair_style: chara.hair_style as u32,
 				hair_color: chara.hair_color as u32,
-				eyebrow_style: chara.eyebrow_style as u32,
-				eye_style: chara.eye_style as u32,
+				eyebrows_style: chara.eyebrows_style as u32,
+				eyes_style: chara.eyes_style as u32,
 				mouth_style: chara.mouth_style as u32,
 				last_location: ZoneId { map_id: chara.world_zone as u16, instance_id: chara.world_instance as u16, clone_id: chara.world_clone as u32 },
 				equipped_items: vec![].into(),
@@ -134,8 +145,8 @@ impl MsgCallback {
 			legs_color: msg.legs_color as i32,
 			hair_style: msg.hair_style as i32,
 			hair_color: msg.hair_color as i32,
-			eyebrow_style: msg.eyebrow_style as i32,
-			eye_style: msg.eye_style as i32,
+			eyebrows_style: msg.eyebrows_style as i32,
+			eyes_style: msg.eyes_style as i32,
 			mouth_style: msg.mouth_style as i32,
 			world_zone: 0,
 			world_instance: 0,
@@ -156,8 +167,8 @@ impl MsgCallback {
 
 	fn on_char_login_req(&self, _msg: &CharacterLoginRequest, _username: &str, ctx: &mut Context) {
 		let lsz = LoadStaticZone {
-			zone_id: ZoneId { map_id: 1000, instance_id: 0, clone_id: 0 },
-			map_checksum: 0x20b8087c,
+			zone_id: ZoneId { map_id: 1100, instance_id: 0, clone_id: 0 },
+			map_checksum: 0x49525511,
 			player_position: Vector3::ZERO,
 			instance_type: InstanceType::Public,
 		};
@@ -180,8 +191,44 @@ impl MsgCallback {
 		ctx.send(CharacterDeleteResponse { success }).unwrap();
 	}
 
-	fn on_level_load_complete(&self, _msg: &LevelLoadComplete, _username: &str, _ctx: &mut Context) {
-		// just dab for now
-		dbg!("dab");
+	fn on_level_load_complete(&mut self, _msg: &LevelLoadComplete, ctx: &mut Context) {
+		let chardata = CreateCharacter { data: lnv! {
+			"objid": 0x10_00_00_01_5b_7b_14_1fu64,
+			"template": 1i32,
+			"name": "GruntMonkey",
+			"xmlData": "<obj v=\"1\"><mf hc=\"11\" hs=\"6\" hd=\"0\" t=\"1\" l=\"6\" hdc=\"0\" cd=\"24\" lh=\"32418832\" rh=\"31971524\" es=\"38\" ess=\"22\" ms=\"24\"/><char acct=\"104116\" cc=\"0\" gm=\"0\" ft=\"0\"/><dest hm=\"4\" hc=\"4\" im=\"0\" ic=\"0\" am=\"0\" ac=\"0\" d=\"0\"/><inv><items><in t=\"0\"><i l=\"4106\" id=\"1152921510436607008\" s=\"0\" eq=\"1\"/><i l=\"2524\" id=\"1152921510436607009\" s=\"1\" eq=\"1\"/></in></items></inv><lvl l=\"1\" cv=\"1\" sb=\"500\"/></obj>",
+		}};
+		ctx.send(chardata).unwrap();
+
+		let game_object = self.spawn();
+		let replica = game_object.make_construction();
+		ctx.send(replica).unwrap();
+
+		let serverdone = game_object.make_sgm(ClientGM::ServerDoneLoadingAllObjects);
+		ctx.send(serverdone).unwrap();
+
+		let playerready = game_object.make_sgm(ClientGM::PlayerReady);
+		ctx.send(playerready).unwrap();
+
+		let postload = game_object.make_sgm(ClientGM::RestoreToPostLoadStats);
+		ctx.send(postload).unwrap();
+	}
+
+	fn on_subject_game_msg(&mut self, msg: &ServerSGM, ctx: &mut Context) {
+		let game_object = match self.game_objects.get_mut(&msg.subject_id) {
+			Some(x) => x,
+			None => {
+				eprintln!("Game object {} does not exist!", msg.subject_id);
+				return;
+			}
+		};
+		game_object.on_game_message(&msg.message, ctx).unwrap();
+	}
+
+	fn spawn(&mut self) -> &GameObject {
+		let obj_id = 0x10_00_00_01_5b_7b_14_1fu64;
+		let game_object = GameObject::new(obj_id);
+		self.game_objects.insert(obj_id, game_object);
+		&self.game_objects[&obj_id]
 	}
 }

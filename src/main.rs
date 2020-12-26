@@ -2,6 +2,7 @@
 #[macro_use]
 extern crate diesel;
 
+mod game_object;
 mod listeners;
 mod models;
 mod schema;

@@ -21,10 +21,10 @@ pub struct Character {
 	pub hair_style: i32,
 	/// Hair color.
 	pub hair_color: i32,
-	/// Eyebrow style.
-	pub eyebrow_style: i32,
-	/// Eye style.
-	pub eye_style: i32,
+	/// Eyebrows style.
+	pub eyebrows_style: i32,
+	/// Eyes style.
+	pub eyes_style: i32,
 	/// Mouth style.
 	pub mouth_style: i32,
 	/// Zone ID of the world where the character is.

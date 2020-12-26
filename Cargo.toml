@@ -10,5 +10,5 @@ repository = "https://github.com/lcdr/world_server/"
 minreq = { version = "2.1.1", features = ["https"] }
 libsqlite3-sys = { version = "0.9.1", features = ["bundled"] }
 diesel = { version = "1.4.3", features = ["sqlite"] }
-lu_packets = { git = "https://github.com/lcdr/lu_packets", rev = "f11fdd7d50109602f7abdeacf78452376b9adbde" }
-base_server = { git = "https://github.com/lcdr/base_server", rev = "14332d2d18609077cc07f0b52042344182703660" }
+lu_packets = { git = "https://github.com/lcdr/lu_packets", rev = "92331a88930b884db093bb4dc683ddd8d8de7c3e" }
+base_server = { git = "https://github.com/lcdr/base_server", rev = "541e796b76c323cc8a0107bade048514a0b26d14" }
