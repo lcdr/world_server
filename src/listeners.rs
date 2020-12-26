@@ -67,10 +67,14 @@ impl MsgCallback {
 		let resp = minreq::get(format!("http://localhost:21835/verify/{}/{}", username, session_key)).send().unwrap();
 		if resp.status_code != 200 {
 			eprintln!("Error {} when trying to verify {} {} with the auth server!", resp.status_code, username, session_key);
+			ctx.send(DisconnectNotify::UnknownServerError).unwrap();
+			ctx.close_conn();
 			return;
 		}
 		if resp.as_bytes() != b"1" {
 			println!("Login attempt from {} with invalid key {}!", username, session_key);
+			ctx.send(DisconnectNotify::InvalidSessionKey).unwrap();
+			ctx.close_conn();
 			return;
 		}
 		let peer_addr = ctx.peer_addr().unwrap();
