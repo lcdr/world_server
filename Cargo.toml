@@ -7,8 +7,10 @@ license = "AGPL-3.0-or-later"
 repository = "https://github.com/lcdr/world_server/"
 
 [dependencies]
+serde = { version = "1.0", features = ["derive"] }
+toml = "0.5"
 minreq = { version = "2.1.1", features = ["https"] }
 libsqlite3-sys = { version = "0.9.1", features = ["bundled"] }
 diesel = { version = "1.4.3", features = ["sqlite"] }
-lu_packets = { git = "https://github.com/lcdr/lu_packets", rev = "92331a88930b884db093bb4dc683ddd8d8de7c3e" }
-base_server = { git = "https://github.com/lcdr/base_server", rev = "541e796b76c323cc8a0107bade048514a0b26d14" }
+lu_packets = { git = "https://github.com/lcdr/lu_packets", rev = "fa5b7cfc916ce8725255ad0fc5178608b85fa04a" }
+base_server = { git = "https://github.com/lcdr/base_server", rev = "9aac51752e2db1dfbcaac79ef2fd009e9c39b467" }

@@ -1,6 +1,6 @@
 use lu_packets::{
 	raknet::client::replica::{ComponentConstruction,
-		controllable_physics::{ControllablePhysicsConstruction, FrameStats, StunImmunityInfo, Unknown1, Unknown2},
+		controllable_physics::{ControllablePhysicsConstruction, FrameStats},
 	},
 	world::{Quaternion, Vector3},
 };
@@ -19,23 +19,10 @@ impl Component for ControllablePhysicsComponent {
 	fn make_construction(&self) -> Box<dyn ComponentConstruction> {
 		Box::new(ControllablePhysicsConstruction {
 			jetpack_info: None,
-			stun_immunity_info: Some(StunImmunityInfo {
-				immune_to_stun_move: 0,
-				immune_to_stun_jump: 0,
-				immune_to_stun_turn: 0,
-				immune_to_stun_attack: 0,
-				immune_to_stun_use_item: 0,
-				immune_to_stun_equip: 0,
-				immune_to_stun_interact: 0,
-			}),
+			stun_immunity_info: None,
 			cheat_info: None,
-			unknown_1: Some(Unknown1 {
-				unknown_1: 0.0,
-				unknown_2: false,
-			}),
-			unknown_2: Some(Unknown2 {
-				unknown_1: None,
-			}),
+			unknown_1: None,
+			unknown_2: None,
 			frame_stats: Some(FrameStats {
 				position: Vector3 {
 					x: -627.1862182617188,

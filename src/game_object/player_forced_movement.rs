@@ -1,6 +1,6 @@
 use lu_packets::{
 	raknet::client::replica::{ComponentConstruction,
-		player_forced_movement::{ForcedMovementInfo, PlayerForcedMovementConstruction},
+		player_forced_movement::{PlayerForcedMovementConstruction},
 	},
 };
 
@@ -17,10 +17,7 @@ impl Component for PlayerForcedMovementComponent {
 
 	fn make_construction(&self) -> Box<dyn ComponentConstruction> {
 		Box::new(PlayerForcedMovementConstruction {
-			forced_movement_info: Some(ForcedMovementInfo {
-				player_on_rail: false,
-				show_billboard: true,
-			}),
+			forced_movement_info: None,
 		})
 	}
 }

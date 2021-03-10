@@ -14,7 +14,7 @@ use std::io::Result as Res;
 
 use lu_packets::{
 	lu,
-	common::ObjId,
+	common::{LuVarWString, ObjId},
 	raknet::client::replica::{ComponentConstruction, ParentChildInfo, ReplicaConstruction},
 	world::gm::client::{SubjectGameMessage as ClientSGM, GameMessage as ClientGM},
 	world::gm::server::GameMessage as ServerGM,
@@ -36,17 +36,24 @@ use self::skill::SkillComponent;
 trait Component {
 	fn new() -> Box<dyn Component> where Self: Sized;
 	fn make_construction(&self) -> Box<dyn ComponentConstruction>;
+	fn write_xml(&self, _writer: &mut String) -> std::fmt::Result {
+		Ok(())
+	}
 }
 
 pub struct GameObject {
+	network_id: u16,
 	object_id: ObjId,
+	name: LuVarWString<u8>,
 	components: Vec<Box<dyn Component>>,
 }
 
 impl GameObject {
-	pub fn new(object_id: ObjId) -> Self {
+	pub fn new(network_id: u16, object_id: ObjId) -> Self {
 		Self {
+			network_id,
 			object_id,
+			name: lu!(&format!("{}", object_id)[..]),
 			components: vec![
 				ControllablePhysicsComponent::new(),
 				BuffComponent::new(),
@@ -63,6 +70,14 @@ impl GameObject {
 		}
 	}
 
+	pub fn object_id(&self) -> ObjId {
+		return self.object_id;
+	}
+
+	pub fn name(&self) -> &LuVarWString<u8> {
+		return &self.name;
+	}
+
 	pub fn make_construction(&self) -> ReplicaConstruction {
 		let mut comp_constructions = vec![];
 
@@ -71,8 +86,8 @@ impl GameObject {
 		}
 
 		ReplicaConstruction {
-			network_id: 11584,
-			object_id: 1152921510436607007,
+			network_id: self.network_id,
+			object_id: self.object_id,
 			lot: 1,
 			name: lu!("GruntMonkey"),
 			time_since_created_on_server: 0,
@@ -89,6 +104,16 @@ impl GameObject {
 			}),
 			components: comp_constructions,
 		}
+	}
+
+	pub fn write_xml(&self, writer: &mut String) -> std::fmt::Result {
+		use std::fmt::Write;
+		write!(writer, "<obj v=\"1\">")?;
+		for comp in &self.components {
+			comp.write_xml(writer)?;
+		}
+		write!(writer, "</obj>")?;
+		Ok(())
 	}
 
 	pub fn make_sgm(&self, message: ClientGM) -> ClientSGM {

@@ -39,7 +39,13 @@ impl Component for InventoryComponent {
 					is_bound: true,
 				},
 			].into()),
-			equipped_model_transforms: Some(vec![].into()),
+			equipped_model_transforms: None,
 		})
+	}
+
+	fn write_xml(&self, writer: &mut String) -> std::fmt::Result {
+		use std::fmt::Write;
+		write!(writer, "<inv><items><in t=\"0\"><i l=\"4106\" id=\"1152921510436607008\" s=\"0\" eq=\"1\"/><i l=\"2524\" id=\"1152921510436607009\" s=\"1\" eq=\"1\"/></in></items></inv>")?;
+		Ok(())
 	}
 }

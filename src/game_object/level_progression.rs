@@ -17,7 +17,7 @@ impl Component for LevelProgressionComponent {
 
 	fn make_construction(&self) -> Box<dyn ComponentConstruction> {
 		Box::new(LevelProgressionConstruction {
-			current_level: Some(1),
+			current_level: None,
 		})
 	}
 }

@@ -17,7 +17,7 @@ impl Component for BbbComponent {
 
 	fn make_construction(&self) -> Box<dyn ComponentConstruction> {
 		Box::new(BbbConstruction {
-			metadata_source_item: Some(0),
+			metadata_source_item: None,
 		})
 	}
 }

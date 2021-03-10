@@ -7,14 +7,14 @@ use diesel::prelude::*;
 use diesel::dsl::{delete, insert_into};
 
 use lu_packets::{
-	lnv,
+	amf3, lu, lnv,
 	common::ObjId,
 	general::client::DisconnectNotify,
 	world::{Vector3, ZoneId},
-	world::client::{CharListChar, CharacterListResponse, CharacterCreateResponse, CharacterDeleteResponse, CreateCharacter, InstanceType, LoadStaticZone, Message as OutMessage},
-	world::gm::client::{GameMessage as ClientGM},
+	world::client::{CharListChar, CharacterListResponse, CharacterCreateResponse, CharacterDeleteResponse, ChatModerationString, CreateCharacter, InstanceType, LoadStaticZone, Message as OutMessage},
+	world::gm::client::{GameMessage as ClientGM, UiMessageServerToSingleClient},
 	world::gm::server::{SubjectGameMessage as ServerSGM},
-	world::server::{CharacterCreateRequest, CharacterDeleteRequest, CharacterLoginRequest, ClientValidation, LevelLoadComplete, Message as IncMessage, WorldMessage},
+	world::server::{CharacterCreateRequest, CharacterDeleteRequest, CharacterLoginRequest, ClientValidation, GeneralChatMessage, LevelLoadComplete, Message as IncMessage, StringCheck, WorldMessage},
 };
 use lu_packets::common::ServiceId;
 use base_server::listeners::{on_conn_req, on_internal_ping, on_handshake};
@@ -27,17 +27,28 @@ pub type Context = C<IncMessage, OutMessage>;
 pub struct MsgCallback {
 	validated: HashMap<SocketAddr, String>,
 	game_objects: HashMap<ObjId, GameObject>,
+	current_spawned_id: ObjId,
+	current_persistent_id: ObjId,
+	current_network_id: u16,
 	/// Connection to the users DB.
 	conn: SqliteConnection,
 }
 
 impl MsgCallback {
 	/// Creates a new callback connecting to the DB at the provided path.
-	pub fn new(db_path: &str) -> Self {
+	pub fn new(cdclient_path: &str, db_path: &str) -> Self {
 		let conn = SqliteConnection::establish(db_path).unwrap();
+
+		const BITS_PERSISTENT: ObjId = 1 << 60;
+		const BITS_LOCAL: ObjId = 1 << 46;
+		const BITS_SPAWNED: ObjId = 1 << 58 | BITS_LOCAL;
+
 		Self {
 			validated: HashMap::new(),
 			game_objects: HashMap::new(),
+			current_spawned_id: BITS_SPAWNED,
+			current_persistent_id: BITS_PERSISTENT,
+			current_network_id: 0,
 			conn,
 		}
 	}
@@ -82,7 +93,6 @@ impl MsgCallback {
 	}
 
 	pub fn on_restricted_msg(&mut self, msg: &WorldMessage, ctx: &mut Context) {
-		dbg!(&msg);
 		let username = match self.validated.get(&ctx.peer_addr().unwrap()) {
 			None =>  {
 			println!("Restricted packet from unvalidated client!");
@@ -99,8 +109,11 @@ impl MsgCallback {
 			CharacterCreateRequest(msg) => self.on_char_create_req(msg, &username, ctx),
 			CharacterLoginRequest(msg)  => self.on_char_login_req(msg, &username, ctx),
 			CharacterDeleteRequest(msg) => self.on_char_del_req(msg, &username, ctx),
+			GeneralChatMessage(msg)     => self.on_general_chat_message(msg, ctx),
 			SubjectGameMessage(msg)     => self.on_subject_game_msg(msg, ctx),
 			LevelLoadComplete(msg)      => self.on_level_load_complete(msg, ctx),
+			PositionUpdate(_)           => {}, // handle this some other time
+			StringCheck(msg)            => self.on_string_check(msg, ctx),
 			_                           => { println!("Unrecognized packet: {:?}", msg); },
 		}
 	}
@@ -196,25 +209,34 @@ impl MsgCallback {
 	}
 
 	fn on_level_load_complete(&mut self, _msg: &LevelLoadComplete, ctx: &mut Context) {
+		let chara = self.spawn_persistent();
+
+		let mut xml = String::new();
+
+		chara.write_xml(&mut xml).unwrap();
+
+		// "<mf hc=\"11\" hs=\"6\" hd=\"0\" t=\"1\" l=\"6\" hdc=\"0\" cd=\"24\" lh=\"32418832\" rh=\"31971524\" es=\"38\" ess=\"22\" ms=\"24\"/><char acct=\"104116\" cc=\"0\" gm=\"0\" ft=\"0\"/><dest hm=\"4\" hc=\"4\" im=\"0\" ic=\"0\" am=\"0\" ac=\"0\" d=\"0\"/><lvl l=\"1\" cv=\"1\" sb=\"500\"/>"
+
+		let name = &format!("{}", chara.object_id())[..];
+
 		let chardata = CreateCharacter { data: lnv! {
-			"objid": 0x10_00_00_01_5b_7b_14_1fu64,
+			"objid": chara.object_id(),
 			"template": 1i32,
-			"name": "GruntMonkey",
-			"xmlData": "<obj v=\"1\"><mf hc=\"11\" hs=\"6\" hd=\"0\" t=\"1\" l=\"6\" hdc=\"0\" cd=\"24\" lh=\"32418832\" rh=\"31971524\" es=\"38\" ess=\"22\" ms=\"24\"/><char acct=\"104116\" cc=\"0\" gm=\"0\" ft=\"0\"/><dest hm=\"4\" hc=\"4\" im=\"0\" ic=\"0\" am=\"0\" ac=\"0\" d=\"0\"/><inv><items><in t=\"0\"><i l=\"4106\" id=\"1152921510436607008\" s=\"0\" eq=\"1\"/><i l=\"2524\" id=\"1152921510436607009\" s=\"1\" eq=\"1\"/></in></items></inv><lvl l=\"1\" cv=\"1\" sb=\"500\"/></obj>",
+			"name": name,
+			"xmlData": &xml[..],
 		}};
 		ctx.send(chardata).unwrap();
 
-		let game_object = self.spawn();
-		let replica = game_object.make_construction();
-		ctx.send(replica).unwrap();
+		let replica = chara.make_construction();
+		ctx.broadcast(replica).unwrap();
 
-		let serverdone = game_object.make_sgm(ClientGM::ServerDoneLoadingAllObjects);
+		let serverdone = chara.make_sgm(ClientGM::ServerDoneLoadingAllObjects);
 		ctx.send(serverdone).unwrap();
 
-		let playerready = game_object.make_sgm(ClientGM::PlayerReady);
+		let playerready = chara.make_sgm(ClientGM::PlayerReady);
 		ctx.send(playerready).unwrap();
 
-		let postload = game_object.make_sgm(ClientGM::RestoreToPostLoadStats);
+		let postload = chara.make_sgm(ClientGM::RestoreToPostLoadStats);
 		ctx.send(postload).unwrap();
 	}
 
@@ -229,9 +251,47 @@ impl MsgCallback {
 		game_object.on_game_message(&msg.message, ctx).unwrap();
 	}
 
+	fn on_string_check(&self, msg: &StringCheck, ctx: &mut Context) {
+		let resp = ChatModerationString {
+			request_id: msg.request_id,
+			chat_mode: msg.chat_mode,
+			whisper_name: lu!(""),
+			spans: vec![],
+		};
+		ctx.send(resp).unwrap();
+	}
+
+	fn on_general_chat_message(&mut self, msg: &GeneralChatMessage, ctx: &mut Context) {
+
+	}
+
+	fn new_spawned_id(&mut self) -> ObjId {
+		self.current_spawned_id += 1;
+		return self.current_spawned_id;
+	}
+
+	fn new_persistent_id(&mut self) -> ObjId {
+		self.current_persistent_id += 1;
+		return self.current_persistent_id;
+	}
+
+	fn new_network_id(&mut self) -> u16 {
+		self.current_network_id += 1;
+		return self.current_network_id;
+	}
+
+	fn spawn_persistent(&mut self) -> &GameObject {
+		let network_id = self.new_network_id();
+		let obj_id = self.new_persistent_id();
+		let game_object = GameObject::new(network_id, obj_id);
+		self.game_objects.insert(obj_id, game_object);
+		&self.game_objects[&obj_id]
+	}
+
 	fn spawn(&mut self) -> &GameObject {
-		let obj_id = 0x10_00_00_01_5b_7b_14_1fu64;
-		let game_object = GameObject::new(obj_id);
+		let network_id = self.new_network_id();
+		let obj_id = self.new_spawned_id();
+		let game_object = GameObject::new(network_id, obj_id);
 		self.game_objects.insert(obj_id, game_object);
 		&self.game_objects[&obj_id]
 	}
