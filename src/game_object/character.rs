@@ -3,12 +3,26 @@ use lu_packets::{
 	raknet::client::replica::{ComponentConstruction,
 		character::{CharacterConstruction, GameActivity, GmPvpInfo, SocialInfo, TransitionState},
 	},
+	world::gm::server::{GameMessage as ServerGM, ParseChatMessage},
 };
 
-use super::Component;
+use crate::listeners::{Context, MsgCallback};
+use super::{Component, GameObject};
 
 pub struct CharacterComponent {
 
+}
+
+impl CharacterComponent {
+	fn on_parse_chat_message(&mut self, msg: &ParseChatMessage, server: &mut MsgCallback, game_object: &mut GameObject, ctx: &mut Context) {
+		use lu_packets::common::LuStrExt;
+		let string = msg.string.to_string();
+
+		if string.starts_with("/") {
+			dbg!(msg);
+			server.on_chat_command(&string, game_object, ctx);
+		}
+	}
 }
 
 impl Component for CharacterComponent {
@@ -77,5 +91,13 @@ impl Component for CharacterComponent {
 				is_lego_club_member: false,
 			}),
 		})
+	}
+
+	fn on_game_message(&mut self, msg: &ServerGM, game_object: &mut GameObject, server: &mut MsgCallback, ctx: &mut Context) {
+		dbg!(msg);
+		match msg {
+			ServerGM::ParseChatMessage(x) => self.on_parse_chat_message(x, server, game_object, ctx),
+			_ => {}
+		}
 	}
 }

@@ -5,6 +5,7 @@ use std::net::SocketAddr;
 
 use diesel::prelude::*;
 use diesel::dsl::{delete, insert_into};
+use rusqlite::Connection as RusqliteConnection;
 
 use lu_packets::{
 	amf3, lu, lnv,
@@ -14,7 +15,7 @@ use lu_packets::{
 	world::client::{CharListChar, CharacterListResponse, CharacterCreateResponse, CharacterDeleteResponse, ChatModerationString, CreateCharacter, InstanceType, LoadStaticZone, Message as OutMessage},
 	world::gm::client::{GameMessage as ClientGM, UiMessageServerToSingleClient},
 	world::gm::server::{SubjectGameMessage as ServerSGM},
-	world::server::{CharacterCreateRequest, CharacterDeleteRequest, CharacterLoginRequest, ClientValidation, GeneralChatMessage, LevelLoadComplete, Message as IncMessage, StringCheck, WorldMessage},
+	world::server::{CharacterCreateRequest, CharacterDeleteRequest, CharacterLoginRequest, ClientValidation, LevelLoadComplete, Message as IncMessage, StringCheck, WorldMessage},
 };
 use lu_packets::common::ServiceId;
 use base_server::listeners::{on_conn_req, on_internal_ping, on_handshake};
@@ -30,6 +31,7 @@ pub struct MsgCallback {
 	current_spawned_id: ObjId,
 	current_persistent_id: ObjId,
 	current_network_id: u16,
+	cdclient: RusqliteConnection,
 	/// Connection to the users DB.
 	conn: SqliteConnection,
 }
@@ -37,6 +39,7 @@ pub struct MsgCallback {
 impl MsgCallback {
 	/// Creates a new callback connecting to the DB at the provided path.
 	pub fn new(cdclient_path: &str, db_path: &str) -> Self {
+		let cdclient = RusqliteConnection::open(cdclient_path).unwrap();
 		let conn = SqliteConnection::establish(db_path).unwrap();
 
 		const BITS_PERSISTENT: ObjId = 1 << 60;
@@ -49,6 +52,7 @@ impl MsgCallback {
 			current_spawned_id: BITS_SPAWNED,
 			current_persistent_id: BITS_PERSISTENT,
 			current_network_id: 0,
+			cdclient,
 			conn,
 		}
 	}
@@ -109,7 +113,6 @@ impl MsgCallback {
 			CharacterCreateRequest(msg) => self.on_char_create_req(msg, &username, ctx),
 			CharacterLoginRequest(msg)  => self.on_char_login_req(msg, &username, ctx),
 			CharacterDeleteRequest(msg) => self.on_char_del_req(msg, &username, ctx),
-			GeneralChatMessage(msg)     => self.on_general_chat_message(msg, ctx),
 			SubjectGameMessage(msg)     => self.on_subject_game_msg(msg, ctx),
 			LevelLoadComplete(msg)      => self.on_level_load_complete(msg, ctx),
 			PositionUpdate(_)           => {}, // handle this some other time
@@ -241,14 +244,15 @@ impl MsgCallback {
 	}
 
 	fn on_subject_game_msg(&mut self, msg: &ServerSGM, ctx: &mut Context) {
-		let game_object = match self.game_objects.get_mut(&msg.subject_id) {
+		let mut game_object = match self.game_objects.remove(&msg.subject_id) {
 			Some(x) => x,
 			None => {
 				eprintln!("Game object {} does not exist!", msg.subject_id);
 				return;
 			}
 		};
-		game_object.on_game_message(&msg.message, ctx).unwrap();
+		game_object.on_game_message(&msg.message, self, ctx).unwrap();
+		self.game_objects.insert(msg.subject_id, game_object);
 	}
 
 	fn on_string_check(&self, msg: &StringCheck, ctx: &mut Context) {
@@ -261,8 +265,70 @@ impl MsgCallback {
 		ctx.send(resp).unwrap();
 	}
 
-	fn on_general_chat_message(&mut self, msg: &GeneralChatMessage, ctx: &mut Context) {
+	pub fn on_chat_command(&mut self, string: &str, sender: &GameObject, ctx: &mut Context) {
+		let args: Vec<_> = string.split_whitespace().collect();
+		let command = match &args[0][1..] {
+			"uidebug"   => Self::send_uidebug_cmd,
+			"gamestate" => Self::send_gamestate_cmd,
+			"toggle"    => Self::send_toggle_scoreboard_cmd,
+			"spawn"     => Self::spawn_cmd,
+			_           => Self::nop_cmd,
+		};
 
+		command(self, sender, ctx, &args);
+	}
+
+	fn send_uidebug_cmd(&mut self, sender: &GameObject, ctx: &mut Context, _args: &Vec<&str>) {
+		let uimsg = sender.make_sgm(ClientGM::UiMessageServerToSingleClient(UiMessageServerToSingleClient {
+			args: amf3! {
+				"visible": true,
+			},
+			message_name: lu!(&b"ToggleUIDebugger"[..]),
+		}));
+		ctx.send(uimsg).unwrap();
+	}
+
+	fn send_gamestate_cmd(&mut self, sender: &GameObject, ctx: &mut Context, _args: &Vec<&str>) {
+		let uimsg = sender.make_sgm(ClientGM::UiMessageServerToSingleClient(UiMessageServerToSingleClient {
+			args: amf3! {
+				"state": "Survival",
+			},
+			message_name: lu!(&b"pushGameState"[..]),
+		}));
+		ctx.send(uimsg).unwrap();
+	}
+
+	fn send_toggle_scoreboard_cmd(&mut self, sender: &GameObject, ctx: &mut Context, _args: &Vec<&str>) {
+		let uimsg = sender.make_sgm(ClientGM::UiMessageServerToSingleClient(UiMessageServerToSingleClient {
+			args: amf3! {"visible": false},
+			message_name: lu!(&b"ToggleSurvivalScoreboard"[..]),
+		}));
+		ctx.send(uimsg).unwrap();
+		let uimsg = sender.make_sgm(ClientGM::UiMessageServerToSingleClient(UiMessageServerToSingleClient {
+			args: amf3! {"visible": true},
+			message_name: lu!(&b"ToggleSurvivalScoreboard"[..]),
+		}));
+		ctx.send(uimsg).unwrap();
+		let uimsg = sender.make_sgm(ClientGM::UiMessageServerToSingleClient(UiMessageServerToSingleClient {
+			args: amf3! {
+				"iplayerName": "Allies",
+				"itime": "200",
+				"inextbestname": "Enemies",
+				"inextbesttime": "321",
+			},
+			message_name: lu!(&b"UpdateSurvivalScoreboard"[..]),
+		}));
+		ctx.send(uimsg).unwrap();
+	}
+
+	fn spawn_cmd(&mut self, _sender: &GameObject, ctx: &mut Context, _args: &Vec<&str>) {
+		let game_object = self.spawn();
+
+		let replica = game_object.make_construction();
+		ctx.send(replica).unwrap();
+	}
+
+	fn nop_cmd(&mut self, _sender: &GameObject, _ctx: &mut Context, _args: &Vec<&str>) {
 	}
 
 	fn new_spawned_id(&mut self) -> ObjId {
@@ -283,7 +349,7 @@ impl MsgCallback {
 	fn spawn_persistent(&mut self) -> &GameObject {
 		let network_id = self.new_network_id();
 		let obj_id = self.new_persistent_id();
-		let game_object = GameObject::new(network_id, obj_id);
+		let game_object = GameObject::new(network_id, obj_id, 1, &self.cdclient);
 		self.game_objects.insert(obj_id, game_object);
 		&self.game_objects[&obj_id]
 	}
@@ -291,7 +357,7 @@ impl MsgCallback {
 	fn spawn(&mut self) -> &GameObject {
 		let network_id = self.new_network_id();
 		let obj_id = self.new_spawned_id();
-		let game_object = GameObject::new(network_id, obj_id);
+		let game_object = GameObject::new(network_id, obj_id, 1, &self.cdclient);
 		self.game_objects.insert(obj_id, game_object);
 		&self.game_objects[&obj_id]
 	}
