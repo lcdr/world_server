@@ -8,12 +8,12 @@ use diesel::dsl::{delete, insert_into};
 use rusqlite::Connection as RusqliteConnection;
 
 use lu_packets::{
-	amf3, lu, lnv,
+	lu, lnv,
 	common::ObjId,
 	general::client::DisconnectNotify,
-	world::{Vector3, ZoneId},
+	world::{Lot, Vector3, ZoneId},
 	world::client::{CharListChar, CharacterListResponse, CharacterCreateResponse, CharacterDeleteResponse, ChatModerationString, CreateCharacter, InstanceType, LoadStaticZone, Message as OutMessage},
-	world::gm::client::{GameMessage as ClientGM, UiMessageServerToSingleClient},
+	world::gm::client::GameMessage as ClientGM,
 	world::gm::server::{SubjectGameMessage as ServerSGM},
 	world::server::{CharacterCreateRequest, CharacterDeleteRequest, CharacterLoginRequest, ClientValidation, LevelLoadComplete, Message as IncMessage, StringCheck, WorldMessage},
 };
@@ -218,8 +218,6 @@ impl MsgCallback {
 
 		chara.write_xml(&mut xml).unwrap();
 
-		// "<mf hc=\"11\" hs=\"6\" hd=\"0\" t=\"1\" l=\"6\" hdc=\"0\" cd=\"24\" lh=\"32418832\" rh=\"31971524\" es=\"38\" ess=\"22\" ms=\"24\"/><char acct=\"104116\" cc=\"0\" gm=\"0\" ft=\"0\"/><dest hm=\"4\" hc=\"4\" im=\"0\" ic=\"0\" am=\"0\" ac=\"0\" d=\"0\"/><lvl l=\"1\" cv=\"1\" sb=\"500\"/>"
-
 		let name = &format!("{}", chara.object_id())[..];
 
 		let chardata = CreateCharacter { data: lnv! {
@@ -265,72 +263,6 @@ impl MsgCallback {
 		ctx.send(resp).unwrap();
 	}
 
-	pub fn on_chat_command(&mut self, string: &str, sender: &GameObject, ctx: &mut Context) {
-		let args: Vec<_> = string.split_whitespace().collect();
-		let command = match &args[0][1..] {
-			"uidebug"   => Self::send_uidebug_cmd,
-			"gamestate" => Self::send_gamestate_cmd,
-			"toggle"    => Self::send_toggle_scoreboard_cmd,
-			"spawn"     => Self::spawn_cmd,
-			_           => Self::nop_cmd,
-		};
-
-		command(self, sender, ctx, &args);
-	}
-
-	fn send_uidebug_cmd(&mut self, sender: &GameObject, ctx: &mut Context, _args: &Vec<&str>) {
-		let uimsg = sender.make_sgm(ClientGM::UiMessageServerToSingleClient(UiMessageServerToSingleClient {
-			args: amf3! {
-				"visible": true,
-			},
-			message_name: lu!(&b"ToggleUIDebugger"[..]),
-		}));
-		ctx.send(uimsg).unwrap();
-	}
-
-	fn send_gamestate_cmd(&mut self, sender: &GameObject, ctx: &mut Context, _args: &Vec<&str>) {
-		let uimsg = sender.make_sgm(ClientGM::UiMessageServerToSingleClient(UiMessageServerToSingleClient {
-			args: amf3! {
-				"state": "Survival",
-			},
-			message_name: lu!(&b"pushGameState"[..]),
-		}));
-		ctx.send(uimsg).unwrap();
-	}
-
-	fn send_toggle_scoreboard_cmd(&mut self, sender: &GameObject, ctx: &mut Context, _args: &Vec<&str>) {
-		let uimsg = sender.make_sgm(ClientGM::UiMessageServerToSingleClient(UiMessageServerToSingleClient {
-			args: amf3! {"visible": false},
-			message_name: lu!(&b"ToggleSurvivalScoreboard"[..]),
-		}));
-		ctx.send(uimsg).unwrap();
-		let uimsg = sender.make_sgm(ClientGM::UiMessageServerToSingleClient(UiMessageServerToSingleClient {
-			args: amf3! {"visible": true},
-			message_name: lu!(&b"ToggleSurvivalScoreboard"[..]),
-		}));
-		ctx.send(uimsg).unwrap();
-		let uimsg = sender.make_sgm(ClientGM::UiMessageServerToSingleClient(UiMessageServerToSingleClient {
-			args: amf3! {
-				"iplayerName": "Allies",
-				"itime": "200",
-				"inextbestname": "Enemies",
-				"inextbesttime": "321",
-			},
-			message_name: lu!(&b"UpdateSurvivalScoreboard"[..]),
-		}));
-		ctx.send(uimsg).unwrap();
-	}
-
-	fn spawn_cmd(&mut self, _sender: &GameObject, ctx: &mut Context, _args: &Vec<&str>) {
-		let game_object = self.spawn();
-
-		let replica = game_object.make_construction();
-		ctx.send(replica).unwrap();
-	}
-
-	fn nop_cmd(&mut self, _sender: &GameObject, _ctx: &mut Context, _args: &Vec<&str>) {
-	}
-
 	fn new_spawned_id(&mut self) -> ObjId {
 		self.current_spawned_id += 1;
 		return self.current_spawned_id;
@@ -354,10 +286,10 @@ impl MsgCallback {
 		&self.game_objects[&obj_id]
 	}
 
-	fn spawn(&mut self) -> &GameObject {
+	pub fn spawn(&mut self, lot: Lot) -> &GameObject {
 		let network_id = self.new_network_id();
 		let obj_id = self.new_spawned_id();
-		let game_object = GameObject::new(network_id, obj_id, 1, &self.cdclient);
+		let game_object = GameObject::new(network_id, obj_id, lot, &self.cdclient);
 		self.game_objects.insert(obj_id, game_object);
 		&self.game_objects[&obj_id]
 	}

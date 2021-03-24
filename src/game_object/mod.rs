@@ -8,6 +8,8 @@ mod inventory;
 mod level_progression;
 mod player_forced_movement;
 mod possession_control;
+mod script;
+mod simple_physics;
 mod skill;
 
 use std::io::Result as Res;
@@ -35,6 +37,8 @@ use self::inventory::InventoryComponent;
 use self::level_progression::LevelProgressionComponent;
 use self::player_forced_movement::PlayerForcedMovementComponent;
 use self::possession_control::PossessionControlComponent;
+use self::script::ScriptComponent;
+use self::simple_physics::SimplePhysicsComponent;
 use self::skill::SkillComponent;
 
 trait Component {
@@ -111,7 +115,9 @@ impl GameObject {
 			} else {
 				components.push(match comp {
 					1  =>  ControllablePhysicsComponent::new(),
+					3  =>  SimplePhysicsComponent::new(),
 					4  =>  CharacterComponent::new(),
+					5  =>  ScriptComponent::new(),
 					7  =>  DestroyableComponent::new(),
 					9  =>  SkillComponent::new(),
 					17 =>  InventoryComponent::new(),
@@ -174,10 +180,10 @@ impl GameObject {
 		Ok(())
 	}
 
-	pub fn make_sgm(&self, message: ClientGM) -> ClientSGM {
+	pub fn make_sgm<T: Into<ClientGM>>(&self, message: T) -> ClientSGM {
 		ClientSGM {
 			subject_id: self.object_id,
-			message,
+			message: message.into(),
 		}
 	}
 

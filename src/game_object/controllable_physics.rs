@@ -25,9 +25,9 @@ impl Component for ControllablePhysicsComponent {
 			unknown_2: None,
 			frame_stats: Some(FrameStats {
 				position: Vector3 {
-					x: -627.1862182617188,
-					y: 613.3262329101562,
-					z: -17.223167419433594,
+					x: 156.0,
+					y: 380.0,
+					z: -187.0,
 				},
 				rotation: Quaternion {
 					x: 0.0,

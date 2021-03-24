@@ -20,7 +20,7 @@ impl CharacterComponent {
 
 		if string.starts_with("/") {
 			dbg!(msg);
-			server.on_chat_command(&string, game_object, ctx);
+			crate::chat::on_chat_command(server, &string, game_object, ctx);
 		}
 	}
 }
