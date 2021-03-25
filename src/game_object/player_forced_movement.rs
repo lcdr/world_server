@@ -2,6 +2,7 @@ use lu_packets::{
 	raknet::client::replica::{ComponentConstruction,
 		player_forced_movement::{PlayerForcedMovementConstruction},
 	},
+	world::LuNameValue,
 };
 
 use super::Component;
@@ -11,7 +12,7 @@ pub struct PlayerForcedMovementComponent {
 }
 
 impl Component for PlayerForcedMovementComponent {
-	fn new() -> Box<dyn Component> {
+	fn new(_config: &LuNameValue) -> Box<dyn Component> {
 		Box::new(Self {})
 	}
 

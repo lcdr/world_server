@@ -2,6 +2,7 @@ use lu_packets::{
 	raknet::client::replica::{ComponentConstruction,
 		skill::SkillConstruction,
 	},
+	world::LuNameValue,
 };
 
 use super::Component;
@@ -11,7 +12,7 @@ pub struct SkillComponent {
 }
 
 impl Component for SkillComponent {
-	fn new() -> Box<dyn Component> {
+	fn new(_config: &LuNameValue) -> Box<dyn Component> {
 		Box::new(Self {})
 	}
 

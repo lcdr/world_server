@@ -7,6 +7,7 @@ mod game_object;
 mod listeners;
 mod models;
 mod schema;
+mod services;
 
 use serde::Deserialize;
 

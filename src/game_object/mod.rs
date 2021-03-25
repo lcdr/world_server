@@ -20,13 +20,14 @@ use lu_packets::{
 	lu,
 	common::{LuVarWString, ObjId},
 	raknet::client::replica::{ComponentConstruction, ParentChildInfo, ReplicaConstruction},
-	world::Lot,
+	world::{Lot, LuNameValue},
 	world::gm::client::{SubjectGameMessage as ClientSGM, GameMessage as ClientGM},
 	world::gm::server::GameMessage as ServerGM,
 };
 
 use crate::listeners::Context;
 use crate::listeners::MsgCallback;
+use crate::services::GameObjectService;
 use self::bbb::BbbComponent;
 use self::buff::BuffComponent;
 use self::character::CharacterComponent;
@@ -42,12 +43,13 @@ use self::simple_physics::SimplePhysicsComponent;
 use self::skill::SkillComponent;
 
 trait Component {
-	fn new() -> Box<dyn Component> where Self: Sized;
+	fn new(config: &LuNameValue) -> Box<dyn Component> where Self: Sized;
 	fn make_construction(&self) -> Box<dyn ComponentConstruction>;
 	fn write_xml(&self, _writer: &mut String) -> std::fmt::Result {
 		Ok(())
 	}
 	fn on_game_message(&mut self, _msg: &ServerGM, _game_object: &mut GameObject, _server: &mut MsgCallback, _ctx: &mut Context) {}
+	fn run_service(&self, _service: &mut GameObjectService) {}
 }
 
 pub struct GameObject {
@@ -61,7 +63,7 @@ pub struct GameObject {
 const COMP_ORDER: [u32; 35] = [108, 61, 1, 30, 20, 3, 40, 98, 7, 110, 109, 106, 4, 26, 17, 5, 9, 60, 11, 48, 25, 16, 100, 102, 19, 39, 23, 75, 42, 6, 49, 2, 44, 71, 107];
 
 impl GameObject {
-	pub fn new(network_id: u16, object_id: ObjId, lot: Lot, cdclient: &RusqliteConnection) -> Self {
+	pub fn new(network_id: u16, object_id: ObjId, lot: Lot, config: &LuNameValue, cdclient: &RusqliteConnection) -> Self {
 
 		let mut stmt = cdclient.prepare("select component_type from componentsregistry where id = ?").unwrap();
 		let mut comps: Vec<u32> = stmt.query_map(params![lot], |row| row.get(0)).unwrap().map(|x| x.unwrap()).collect();
@@ -73,7 +75,7 @@ impl GameObject {
 		let mut final_comps = vec![];
 		Self::apply_component_overrides(&comps, &mut final_comps);
 
-		let components = Self::create_components(&final_comps);
+		let components = Self::create_components(&final_comps, config);
 
 		Self {
 			network_id,
@@ -107,28 +109,28 @@ impl GameObject {
 		}
 	}
 
-	fn create_components(comps: &Vec<u32>) -> Vec<Box<dyn Component>> {
+	fn create_components(comps: &Vec<u32>, config: &LuNameValue) -> Vec<Box<dyn Component>> {
 		let mut components = vec![];
 
 		for comp in comps {
 			if let 2 | 12 | 24 | 27 | 31 | 35 | 36 | 43 | 45 | 55 | 56 | 57 | 64 | 65 | 67 | 68 | 73 | 74 | 78 | 95 | 104 | 113 | 114 = comp {
 			} else {
 				components.push(match comp {
-					1  =>  ControllablePhysicsComponent::new(),
-					3  =>  SimplePhysicsComponent::new(),
-					4  =>  CharacterComponent::new(),
-					5  =>  ScriptComponent::new(),
-					7  =>  DestroyableComponent::new(),
-					9  =>  SkillComponent::new(),
-					17 =>  InventoryComponent::new(),
-					44 =>  FxComponent::new(),
-					98 =>  BuffComponent::new(),
-					106 => PlayerForcedMovementComponent::new(),
-					107 => BbbComponent::new(),
-					109 => LevelProgressionComponent::new(),
-					110 => PossessionControlComponent::new(),
+					1  =>  ControllablePhysicsComponent::new,
+					3  =>  SimplePhysicsComponent::new,
+					4  =>  CharacterComponent::new,
+					5  =>  ScriptComponent::new,
+					7  =>  DestroyableComponent::new,
+					9  =>  SkillComponent::new,
+					17 =>  InventoryComponent::new,
+					44 =>  FxComponent::new,
+					98 =>  BuffComponent::new,
+					106 => PlayerForcedMovementComponent::new,
+					107 => BbbComponent::new,
+					109 => LevelProgressionComponent::new,
+					110 => PossessionControlComponent::new,
 					x => panic!("{}", x),
-				});
+				}(config));
 			}
 		}
 		components
@@ -199,5 +201,12 @@ impl GameObject {
 			}
 		}
 		Ok(())
+	}
+
+	pub fn run_service<'a, S: Into<GameObjectService<'a>>>(&self, service: S) {
+		let mut go_service = service.into();
+		for comp in &self.components {
+			comp.run_service(&mut go_service);
+		}
 	}
 }

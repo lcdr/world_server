@@ -11,7 +11,7 @@ use lu_packets::{
 	lu, lnv,
 	common::ObjId,
 	general::client::DisconnectNotify,
-	world::{Lot, Vector3, ZoneId},
+	world::{Lot, LuNameValue, Vector3, ZoneId},
 	world::client::{CharListChar, CharacterListResponse, CharacterCreateResponse, CharacterDeleteResponse, ChatModerationString, CreateCharacter, InstanceType, LoadStaticZone, Message as OutMessage},
 	world::gm::client::GameMessage as ClientGM,
 	world::gm::server::{SubjectGameMessage as ServerSGM},
@@ -96,7 +96,7 @@ impl MsgCallback {
 		self.validated.insert(peer_addr, username);
 	}
 
-	pub fn on_restricted_msg(&mut self, msg: &WorldMessage, ctx: &mut Context) {
+	fn on_restricted_msg(&mut self, msg: &WorldMessage, ctx: &mut Context) {
 		let username = match self.validated.get(&ctx.peer_addr().unwrap()) {
 			None =>  {
 			println!("Restricted packet from unvalidated client!");
@@ -212,24 +212,28 @@ impl MsgCallback {
 	}
 
 	fn on_level_load_complete(&mut self, _msg: &LevelLoadComplete, ctx: &mut Context) {
-		let chara = self.spawn_persistent();
+		let chara = self.spawn_player();
 
 		let mut xml = String::new();
-
 		chara.write_xml(&mut xml).unwrap();
 
-		let name = &format!("{}", chara.object_id())[..];
+		let obj_id = chara.object_id();
+		let name = &format!("{}", obj_id)[..];
 
 		let chardata = CreateCharacter { data: lnv! {
-			"objid": chara.object_id(),
+			"objid": obj_id,
 			"template": 1i32,
 			"name": name,
 			"xmlData": &xml[..],
 		}};
 		ctx.send(chardata).unwrap();
 
-		let replica = chara.make_construction();
-		ctx.broadcast(replica).unwrap();
+		for game_object in self.game_objects.values() {
+			let replica = game_object.make_construction();
+			ctx.broadcast(replica).unwrap();
+		}
+
+		let chara = &self.game_objects[&obj_id];
 
 		let serverdone = chara.make_sgm(ClientGM::ServerDoneLoadingAllObjects);
 		ctx.send(serverdone).unwrap();
@@ -278,19 +282,19 @@ impl MsgCallback {
 		return self.current_network_id;
 	}
 
-	fn spawn_persistent(&mut self) -> &GameObject {
-		let network_id = self.new_network_id();
-		let obj_id = self.new_persistent_id();
-		let game_object = GameObject::new(network_id, obj_id, 1, &self.cdclient);
-		self.game_objects.insert(obj_id, game_object);
-		&self.game_objects[&obj_id]
+	fn spawn_player(&mut self) -> &GameObject {
+		self.spawn_internal(true, 1, &lnv!{})
 	}
 
-	pub fn spawn(&mut self, lot: Lot) -> &GameObject {
+	pub fn spawn(&mut self, lot: Lot, config: &LuNameValue) -> &mut GameObject {
+		self.spawn_internal(false, lot, config)
+	}
+
+	fn spawn_internal(&mut self, is_persistent: bool, lot: Lot, config: &LuNameValue) -> &mut GameObject {
 		let network_id = self.new_network_id();
-		let obj_id = self.new_spawned_id();
-		let game_object = GameObject::new(network_id, obj_id, lot, &self.cdclient);
+		let obj_id = if is_persistent { self.new_persistent_id() } else { self.new_spawned_id() };
+		let game_object = GameObject::new(network_id, obj_id, lot, config, &self.cdclient);
 		self.game_objects.insert(obj_id, game_object);
-		&self.game_objects[&obj_id]
+		self.game_objects.get_mut(&obj_id).unwrap()
 	}
 }

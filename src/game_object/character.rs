@@ -3,6 +3,7 @@ use lu_packets::{
 	raknet::client::replica::{ComponentConstruction,
 		character::{CharacterConstruction, GameActivity, GmPvpInfo, SocialInfo, TransitionState},
 	},
+	world::LuNameValue,
 	world::gm::server::{GameMessage as ServerGM, ParseChatMessage},
 };
 
@@ -26,7 +27,7 @@ impl CharacterComponent {
 }
 
 impl Component for CharacterComponent {
-	fn new() -> Box<dyn Component> {
+	fn new(_config: &LuNameValue) -> Box<dyn Component> {
 		Box::new(Self {})
 	}
 
