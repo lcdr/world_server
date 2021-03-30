@@ -10,6 +10,10 @@ use super::InternalComponent;
 pub struct ControllablePhysicsComponent {
 	position: Vector3,
 	rotation: Quaternion,
+	is_on_ground: bool,
+	is_on_rail: bool,
+	linear_velocity: Option<Vector3>,
+	angular_velocity: Option<Vector3>,
 }
 
 impl InternalComponent for ControllablePhysicsComponent {
@@ -28,6 +32,10 @@ impl InternalComponent for ControllablePhysicsComponent {
 		Self {
 			position: Vector3 { x: pos_x, y: pos_y, z: pos_z },
 			rotation: Quaternion { x: rot_x, y: rot_y, z: rot_z, w: rot_w },
+			is_on_ground: true,
+			is_on_rail: false,
+			linear_velocity: None,
+			angular_velocity: None,
 		}
 	}
 
@@ -41,10 +49,10 @@ impl InternalComponent for ControllablePhysicsComponent {
 			frame_stats: Some(FrameStats {
 				position: self.position,
 				rotation: self.rotation,
-				is_on_ground: true,
-				is_on_rail: false,
-				linear_velocity: None,
-				angular_velocity: None,
+				is_on_ground: self.is_on_ground,
+				is_on_rail: self.is_on_rail,
+				linear_velocity: self.linear_velocity,
+				angular_velocity: self.angular_velocity,
 				local_space_info: None,
 			}),
 		}
@@ -59,10 +67,10 @@ impl InternalComponent for ControllablePhysicsComponent {
 				frame_stats: FrameStats {
 					position: self.position,
 					rotation: self.rotation,
-					is_on_ground: true,
-					is_on_rail: false,
-					linear_velocity: None,
-					angular_velocity: None,
+					is_on_ground: self.is_on_ground,
+					is_on_rail: self.is_on_rail,
+					linear_velocity: self.linear_velocity,
+					angular_velocity: self.angular_velocity,
 					local_space_info: None,
 				},
 				is_teleporting: false,
@@ -87,6 +95,10 @@ impl InternalComponent for ControllablePhysicsComponent {
 			GameObjectServiceMut::SetFrameStats(frame_stats) => {
 				self.position = frame_stats.position;
 				self.rotation = frame_stats.rotation;
+				self.is_on_ground = frame_stats.is_on_ground;
+				self.is_on_rail = frame_stats.is_on_rail;
+				self.linear_velocity = frame_stats.linear_velocity;
+				self.angular_velocity = frame_stats.angular_velocity;
 			},
 			_ => {},
 		}

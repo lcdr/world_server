@@ -101,7 +101,7 @@ fn spawn_cmd(server: &mut MsgCallback, sender: &GameObject, ctx: &mut Context, a
 	let game_object = server.spawn(lot, &config);
 
 	let replica = game_object.make_construction();
-	ctx.send(replica)
+	ctx.broadcast(replica)
 }
 
 fn nop_cmd(_server: &mut MsgCallback, _sender: &GameObject, _ctx: &mut Context, _args: &Vec<&str>) -> Res<()> {
