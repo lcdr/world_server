@@ -1,23 +1,23 @@
 use lu_packets::{
-	raknet::client::replica::{ComponentConstruction,
-		inventory::{EquippedItemInfo, InventoryConstruction},
-	},
+	raknet::client::replica::inventory::{EquippedItemInfo, InventoryConstruction, InventoryProtocol, InventorySerialization},
 	world::LuNameValue,
 };
 
-use super::Component;
+use super::InternalComponent;
 
 pub struct InventoryComponent {
 
 }
 
-impl Component for InventoryComponent {
-	fn new(_config: &LuNameValue) -> Box<dyn Component> {
-		Box::new(Self {})
+impl InternalComponent for InventoryComponent {
+	type ComponentProtocol = InventoryProtocol;
+
+	fn new(_config: &LuNameValue) -> Self {
+		Self {}
 	}
 
-	fn make_construction(&self) -> Box<dyn ComponentConstruction> {
-		Box::new(InventoryConstruction {
+	fn make_construction(&self) -> InventoryConstruction {
+		InventoryConstruction {
 			equipped_items: Some(vec![
 				EquippedItemInfo {
 					id: 1152921510436607008,
@@ -41,7 +41,35 @@ impl Component for InventoryComponent {
 				},
 			].into()),
 			equipped_model_transforms: None,
-		})
+		}
+	}
+
+	fn make_serialization(&self) -> InventorySerialization {
+		InventorySerialization {
+			equipped_items: Some(vec![
+				EquippedItemInfo {
+					id: 1152921510436607008,
+					lot: 4106,
+					subkey: None,
+					count: Some(1),
+					slot: None,
+					inventory_type: None,
+					extra_info: None,
+					is_bound: true,
+				},
+				EquippedItemInfo {
+					id: 1152921510436607009,
+					lot: 2524,
+					subkey: None,
+					count: Some(1),
+					slot: Some(1),
+					inventory_type: None,
+					extra_info: None,
+					is_bound: true,
+				},
+			].into()),
+			equipped_model_transforms: None,
+		}
 	}
 
 	fn write_xml(&self, writer: &mut String) -> std::fmt::Result {

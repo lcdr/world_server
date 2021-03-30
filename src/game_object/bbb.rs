@@ -1,24 +1,30 @@
 use lu_packets::{
-	raknet::client::replica::{ComponentConstruction,
-		bbb::BbbConstruction,
-	},
+	raknet::client::replica::bbb::{BbbConstruction, BbbProtocol, BbbSerialization},
 	world::LuNameValue,
 };
 
-use super::Component;
+use super::InternalComponent;
 
 pub struct BbbComponent {
 
 }
 
-impl Component for BbbComponent {
-	fn new(_config: &LuNameValue) -> Box<dyn Component> {
-		Box::new(Self {})
+impl InternalComponent for BbbComponent {
+	type ComponentProtocol = BbbProtocol;
+
+	fn new(_config: &LuNameValue) -> Self {
+		Self {}
 	}
 
-	fn make_construction(&self) -> Box<dyn ComponentConstruction> {
-		Box::new(BbbConstruction {
+	fn make_construction(&self) -> BbbConstruction {
+		BbbConstruction {
 			metadata_source_item: None,
-		})
+		}
+	}
+
+	fn make_serialization(&self) -> BbbSerialization {
+		BbbSerialization {
+			metadata_source_item: None,
+		}
 	}
 }

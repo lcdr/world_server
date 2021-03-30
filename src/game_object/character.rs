@@ -1,14 +1,12 @@
 use lu_packets::{
 	lu,
-	raknet::client::replica::{ComponentConstruction,
-		character::{CharacterConstruction, GameActivity, GmPvpInfo, SocialInfo, TransitionState},
-	},
+	raknet::client::replica::character::{CharacterConstruction, CharacterProtocol, CharacterSerialization, GameActivity, GmPvpInfo, SocialInfo, TransitionState},
 	world::LuNameValue,
 	world::gm::server::{GameMessage as ServerGM, ParseChatMessage},
 };
 
 use crate::listeners::{Context, MsgCallback};
-use super::{Component, GameObject};
+use super::{InternalComponent, GameObject};
 
 pub struct CharacterComponent {
 
@@ -26,13 +24,15 @@ impl CharacterComponent {
 	}
 }
 
-impl Component for CharacterComponent {
-	fn new(_config: &LuNameValue) -> Box<dyn Component> {
-		Box::new(Self {})
+impl InternalComponent for CharacterComponent {
+	type ComponentProtocol = CharacterProtocol;
+
+	fn new(_config: &LuNameValue) -> Self {
+		Self {}
 	}
 
-	fn make_construction(&self) -> Box<dyn ComponentConstruction> {
-		Box::new(CharacterConstruction {
+	fn make_construction(&self) -> CharacterConstruction {
+		CharacterConstruction {
 			claim_code_1: None,
 			claim_code_2: None,
 			claim_code_3: None,
@@ -91,7 +91,15 @@ impl Component for CharacterComponent {
 				guild_name: lu!(""),
 				is_lego_club_member: false,
 			}),
-		})
+		}
+	}
+
+	fn make_serialization(&self) -> CharacterSerialization {
+		CharacterSerialization {
+			gm_pvp_info: None,
+			current_activity: None,
+			social_info: None,
+		}
 	}
 
 	fn on_game_message(&mut self, msg: &ServerGM, game_object: &mut GameObject, server: &mut MsgCallback, ctx: &mut Context) {

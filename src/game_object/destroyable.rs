@@ -1,23 +1,23 @@
 use lu_packets::{
-	raknet::client::replica::{ComponentConstruction,
-		destroyable::{DestroyableConstruction, StatsInfo, StatusImmunityInfo},
-	},
+	raknet::client::replica::destroyable::{DestroyableConstruction, DestroyableProtocol, DestroyableSerialization, StatsInfo, StatusImmunityInfo},
 	world::LuNameValue,
 };
 
-use super::Component;
+use super::InternalComponent;
 
 pub struct DestroyableComponent {
 
 }
 
-impl Component for DestroyableComponent {
-	fn new(_config: &LuNameValue) -> Box<dyn Component> {
-		Box::new(Self {})
+impl InternalComponent for DestroyableComponent {
+	type ComponentProtocol = DestroyableProtocol;
+
+	fn new(_config: &LuNameValue) -> Self {
+		Self {}
 	}
 
-	fn make_construction(&self) -> Box<dyn ComponentConstruction> {
-		Box::new(DestroyableConstruction {
+	fn make_construction(&self) -> DestroyableConstruction {
+		DestroyableConstruction {
 			status_immunity_info: Some(StatusImmunityInfo {
 				immune_to_basic_attack: 0,
 				immune_to_damage_over_time: 0,
@@ -49,6 +49,13 @@ impl Component for DestroyableComponent {
 				smashable_info: None,
 			}),
 			is_on_a_threat_list: Some(false),
-		})
+		}
+	}
+
+	fn make_serialization(&self) -> DestroyableSerialization {
+		DestroyableSerialization {
+			serialization_stats_info: None,
+			is_on_a_threat_list: None,
+		}
 	}
 }

@@ -8,10 +8,10 @@ pub enum GameObjectService<'a> {
 	GetRotation(&'a mut GetRotation),
 }
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct GetPosition(pub Vector3);
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct GetRotation(pub Quaternion);
 
 #[derive(Debug, FromVariants)]

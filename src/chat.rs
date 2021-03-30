@@ -2,7 +2,6 @@ use std::io::Result as Res;
 
 use lu_packets::{
 	amf3, lnv, lu,
-	world::{Quaternion, Vector3},
 	world::gm::client::{SetJetPackMode, UiMessageServerToSingleClient},
 };
 
@@ -86,9 +85,9 @@ fn spawn_cmd(server: &mut MsgCallback, sender: &GameObject, ctx: &mut Context, a
 		return Ok(());
 	}
 	let lot = args[1].parse().unwrap();
-	let mut get_pos = GetPosition(Vector3::ZERO);
+	let mut get_pos = GetPosition::default();
 	sender.run_service(&mut get_pos);
-	let mut get_rot = GetRotation(Quaternion::IDENTITY);
+	let mut get_rot = GetRotation::default();
 	sender.run_service(&mut get_rot);
 	let config = lnv!(
 		"position_x": get_pos.0.x,

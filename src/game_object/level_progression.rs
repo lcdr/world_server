@@ -1,24 +1,30 @@
 use lu_packets::{
-	raknet::client::replica::{ComponentConstruction,
-		level_progression::LevelProgressionConstruction,
-	},
+	raknet::client::replica::level_progression::{LevelProgressionConstruction, LevelProgressionProtocol, LevelProgressionSerialization},
 	world::LuNameValue,
 };
 
-use super::Component;
+use super::InternalComponent;
 
 pub struct LevelProgressionComponent {
 
 }
 
-impl Component for LevelProgressionComponent {
-	fn new(_config: &LuNameValue) -> Box<dyn Component> {
-		Box::new(Self {})
+impl InternalComponent for LevelProgressionComponent {
+	type ComponentProtocol = LevelProgressionProtocol;
+
+	fn new(_config: &LuNameValue) -> Self {
+		Self {}
 	}
 
-	fn make_construction(&self) -> Box<dyn ComponentConstruction> {
-		Box::new(LevelProgressionConstruction {
+	fn make_construction(&self) -> LevelProgressionConstruction {
+		LevelProgressionConstruction {
 			current_level: None,
-		})
+		}
+	}
+
+	fn make_serialization(&self) -> LevelProgressionSerialization {
+		LevelProgressionSerialization {
+			current_level: None,
+		}
 	}
 }

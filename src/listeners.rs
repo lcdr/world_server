@@ -162,11 +162,11 @@ impl MsgCallback {
 		}).unwrap()
 	}
 
-	fn on_char_create_req(&self, msg: &CharacterCreateRequest, acc_info: &AccountInfo, ctx: &mut Context) {
+	fn on_char_create_req(&mut self, msg: &CharacterCreateRequest, acc_info: &AccountInfo, ctx: &mut Context) {
 		use crate::schema::characters::dsl::{characters};
 
 		let new_char = Character {
-			id: 0, // good id
+			id: self.new_persistent_id() as i32,
 			username: acc_info.username.to_string(),
 			name: String::from(&msg.char_name),
 			torso_color: msg.torso_color as i32,
@@ -262,9 +262,11 @@ impl MsgCallback {
 		});
 	}
 
-	fn on_position_update(&mut self, msg: &PositionUpdate, acc_info: &AccountInfo, _ctx: &mut Context) {
+	fn on_position_update(&mut self, msg: &PositionUpdate, acc_info: &AccountInfo, ctx: &mut Context) {
 		self.with_game_object(acc_info.active_character_id, |_server, game_object| {
 			game_object.run_service_mut(&msg.frame_stats);
+			let ser = game_object.make_serialization();
+			ctx.broadcast(ser).unwrap();
 		});
 	}
 

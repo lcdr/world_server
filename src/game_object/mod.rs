@@ -19,7 +19,7 @@ use rusqlite::{Connection as RusqliteConnection, params};
 use lu_packets::{
 	lu,
 	common::{LuVarWString, ObjId},
-	raknet::client::replica::{ComponentConstruction, ParentChildInfo, ReplicaConstruction},
+	raknet::client::replica::{ComponentConstruction, ComponentProtocol, ComponentSerialization, ReplicaConstruction, ReplicaSerialization},
 	world::{Lot, LuNameValue},
 	world::gm::client::{SubjectGameMessage as ClientSGM, GameMessage as ClientGM},
 	world::gm::server::GameMessage as ServerGM,
@@ -42,15 +42,58 @@ use self::script::ScriptComponent;
 use self::simple_physics::SimplePhysicsComponent;
 use self::skill::SkillComponent;
 
-trait Component {
-	fn new(config: &LuNameValue) -> Box<dyn Component> where Self: Sized;
-	fn make_construction(&self) -> Box<dyn ComponentConstruction>;
+trait InternalComponent {
+	type ComponentProtocol: ComponentProtocol;
+
+	fn new(config: &LuNameValue) -> Self where Self: Sized;
+	fn make_construction(&self) -> <<Self as InternalComponent>::ComponentProtocol as ComponentProtocol>::Construction;
+	fn make_serialization(&self) -> <<Self as InternalComponent>::ComponentProtocol as ComponentProtocol>::Serialization;
 	fn write_xml(&self, _writer: &mut String) -> std::fmt::Result {
 		Ok(())
 	}
 	fn on_game_message(&mut self, _msg: &ServerGM, _game_object: &mut GameObject, _server: &mut MsgCallback, _ctx: &mut Context) {}
 	fn run_service(&self, _service: &mut GameObjectService) {}
 	fn run_service_mut(&mut self, _service: &mut GameObjectServiceMut) {}
+}
+
+trait Component {
+	fn new_c(config: &LuNameValue) -> Box<dyn Component> where Self: Sized;
+	fn make_construction(&self) -> Box<dyn ComponentConstruction>;
+	fn make_serialization(&self) -> Box<dyn ComponentSerialization>;
+	fn write_xml(&self, _writer: &mut String) -> std::fmt::Result;
+	fn on_game_message(&mut self, _msg: &ServerGM, _game_object: &mut GameObject, _server: &mut MsgCallback, _ctx: &mut Context);
+	fn run_service(&self, _service: &mut GameObjectService);
+	fn run_service_mut(&mut self, _service: &mut GameObjectServiceMut);
+}
+
+impl<I: 'static+InternalComponent> Component for I {
+	fn new_c(config: &LuNameValue) -> Box<dyn Component> where Self: Sized {
+		Box::new(<I as InternalComponent>::new(config))
+	}
+
+	fn make_construction(&self) -> Box<dyn ComponentConstruction> {
+		Box::new(<I as InternalComponent>::make_construction(self))
+	}
+
+	fn make_serialization(&self) -> Box<dyn ComponentSerialization> {
+		Box::new(<I as InternalComponent>::make_serialization(self))
+	}
+
+	fn write_xml(&self, writer: &mut String) -> std::fmt::Result {
+		<I as InternalComponent>::write_xml(self, writer)
+	}
+
+	fn on_game_message(&mut self, msg: &ServerGM, game_object: &mut GameObject, server: &mut MsgCallback, ctx: &mut Context) {
+		<I as InternalComponent>::on_game_message(self, msg, game_object, server, ctx)
+	}
+
+	fn run_service(&self, service: &mut GameObjectService) {
+		<I as InternalComponent>::run_service(self, service)
+	}
+
+	fn run_service_mut(&mut self, service: &mut GameObjectServiceMut) {
+		<I as InternalComponent>::run_service_mut(self, service)
+	}
 }
 
 pub struct GameObject {
@@ -117,19 +160,19 @@ impl GameObject {
 			if let 2 | 12 | 24 | 27 | 31 | 35 | 36 | 43 | 45 | 55 | 56 | 57 | 64 | 65 | 67 | 68 | 73 | 74 | 78 | 95 | 104 | 113 | 114 = comp {
 			} else {
 				components.push(match comp {
-					1  =>  ControllablePhysicsComponent::new,
-					3  =>  SimplePhysicsComponent::new,
-					4  =>  CharacterComponent::new,
-					5  =>  ScriptComponent::new,
-					7  =>  DestroyableComponent::new,
-					9  =>  SkillComponent::new,
-					17 =>  InventoryComponent::new,
-					44 =>  FxComponent::new,
-					98 =>  BuffComponent::new,
-					106 => PlayerForcedMovementComponent::new,
-					107 => BbbComponent::new,
-					109 => LevelProgressionComponent::new,
-					110 => PossessionControlComponent::new,
+					1  =>  ControllablePhysicsComponent::new_c,
+					3  =>  SimplePhysicsComponent::new_c,
+					4  =>  CharacterComponent::new_c,
+					5  =>  ScriptComponent::new_c,
+					7  =>  DestroyableComponent::new_c,
+					9  =>  SkillComponent::new_c,
+					17 =>  InventoryComponent::new_c,
+					44 =>  FxComponent::new_c,
+					98 =>  BuffComponent::new_c,
+					106 => PlayerForcedMovementComponent::new_c,
+					107 => BbbComponent::new_c,
+					109 => LevelProgressionComponent::new_c,
+					110 => PossessionControlComponent::new_c,
 					x => panic!("{}", x),
 				}(config));
 			}
@@ -165,11 +208,22 @@ impl GameObject {
 			scale: None,
 			world_state: None,
 			gm_level: None,
-			parent_child_info: Some(ParentChildInfo {
-				parent_info: None,
-				child_info: None,
-			}),
+			parent_child_info: None,
 			components: comp_constructions,
+		}
+	}
+
+	pub fn make_serialization(&self) -> ReplicaSerialization {
+		let mut comp_serializations = vec![];
+
+		for comp in &self.components {
+			comp_serializations.push(comp.make_serialization());
+		}
+
+		ReplicaSerialization {
+			network_id: self.network_id,
+			parent_child_info: None,
+			components: comp_serializations,
 		}
 	}
 

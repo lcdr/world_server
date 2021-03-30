@@ -1,24 +1,28 @@
 use lu_packets::{
-	raknet::client::replica::{ComponentConstruction,
-		skill::SkillConstruction,
-	},
+	raknet::client::replica::skill::{SkillConstruction, SkillProtocol, SkillSerialization},
 	world::LuNameValue,
 };
 
-use super::Component;
+use super::InternalComponent;
 
 pub struct SkillComponent {
 
 }
 
-impl Component for SkillComponent {
-	fn new(_config: &LuNameValue) -> Box<dyn Component> {
-		Box::new(Self {})
+impl InternalComponent for SkillComponent {
+	type ComponentProtocol = SkillProtocol;
+
+	fn new(_config: &LuNameValue) -> Self {
+		Self {}
 	}
 
-	fn make_construction(&self) -> Box<dyn ComponentConstruction> {
-		Box::new(SkillConstruction {
+	fn make_construction(&self) -> SkillConstruction {
+		SkillConstruction {
 			skills_in_progress: None,
-		})
+		}
+	}
+
+	fn make_serialization(&self) -> SkillSerialization {
+		SkillSerialization {}
 	}
 }

@@ -1,24 +1,28 @@
 use lu_packets::{
-	raknet::client::replica::{ComponentConstruction,
-		fx::FxConstruction,
-	},
+	raknet::client::replica::fx::{FxConstruction, FxProtocol, FxSerialization},
 	world::LuNameValue,
 };
 
-use super::Component;
+use super::InternalComponent;
 
 pub struct FxComponent {
 
 }
 
-impl Component for FxComponent {
-	fn new(_config: &LuNameValue) -> Box<dyn Component> {
-		Box::new(Self {})
+impl InternalComponent for FxComponent {
+	type ComponentProtocol = FxProtocol;
+
+	fn new(_config: &LuNameValue) -> Self {
+		Self {}
 	}
 
-	fn make_construction(&self) -> Box<dyn ComponentConstruction> {
-		Box::new(FxConstruction {
+	fn make_construction(&self) -> FxConstruction {
+		FxConstruction {
 			active_effects: vec![].into(),
-		})
+		}
+	}
+
+	fn make_serialization(&self) -> FxSerialization {
+		FxSerialization {}
 	}
 }

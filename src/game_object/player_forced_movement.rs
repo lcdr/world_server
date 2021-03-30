@@ -1,24 +1,30 @@
 use lu_packets::{
-	raknet::client::replica::{ComponentConstruction,
-		player_forced_movement::{PlayerForcedMovementConstruction},
-	},
+	raknet::client::replica::player_forced_movement::{PlayerForcedMovementConstruction, PlayerForcedMovementProtocol, PlayerForcedMovementSerialization},
 	world::LuNameValue,
 };
 
-use super::Component;
+use super::InternalComponent;
 
 pub struct PlayerForcedMovementComponent {
 
 }
 
-impl Component for PlayerForcedMovementComponent {
-	fn new(_config: &LuNameValue) -> Box<dyn Component> {
-		Box::new(Self {})
+impl InternalComponent for PlayerForcedMovementComponent {
+	type ComponentProtocol = PlayerForcedMovementProtocol;
+
+	fn new(_config: &LuNameValue) -> Self {
+		Self {}
 	}
 
-	fn make_construction(&self) -> Box<dyn ComponentConstruction> {
-		Box::new(PlayerForcedMovementConstruction {
+	fn make_construction(&self) -> PlayerForcedMovementConstruction {
+		PlayerForcedMovementConstruction {
 			forced_movement_info: None,
-		})
+		}
+	}
+
+	fn make_serialization(&self) -> PlayerForcedMovementSerialization {
+		PlayerForcedMovementSerialization {
+			forced_movement_info: None,
+		}
 	}
 }

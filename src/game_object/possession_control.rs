@@ -1,27 +1,30 @@
 use lu_packets::{
-	raknet::client::replica::{ComponentConstruction,
-		possession_control::{PossessionControlConstruction, PossessionInfo, PossessionType},
-	},
+	raknet::client::replica::possession_control::{PossessionControlConstruction, PossessionControlProtocol, PossessionControlSerialization},
 	world::LuNameValue,
 };
 
-use super::Component;
+use super::InternalComponent;
 
 pub struct PossessionControlComponent {
 
 }
 
-impl Component for PossessionControlComponent {
-	fn new(_config: &LuNameValue) -> Box<dyn Component> {
-		Box::new(Self {})
+impl InternalComponent for PossessionControlComponent {
+	type ComponentProtocol = PossessionControlProtocol;
+
+	fn new(_config: &LuNameValue) -> Self {
+		Self {}
 	}
 
-	fn make_construction(&self) -> Box<dyn ComponentConstruction> {
-		Box::new(PossessionControlConstruction {
-			possession_info: Some(PossessionInfo {
-				possessed_id: None,
-				possession_type: PossessionType::NoPossession,
-			}),
-		})
+	fn make_construction(&self) -> PossessionControlConstruction {
+		PossessionControlConstruction {
+			possession_info: None,
+		}
+	}
+
+	fn make_serialization(&self) -> PossessionControlSerialization {
+		PossessionControlSerialization {
+			possession_info: None,
+		}
 	}
 }

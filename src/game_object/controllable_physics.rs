@@ -1,21 +1,21 @@
 use lu_packets::{
 	lu,
-	raknet::client::replica::{ComponentConstruction,
-		controllable_physics::{ControllablePhysicsConstruction, FrameStats},
-	},
+	raknet::client::replica::controllable_physics::{ControllablePhysicsConstruction, ControllablePhysicsProtocol, ControllablePhysicsSerialization, FrameStats, FrameStatsTeleportInfo},
 	world::{LuNameValue, LnvValue, Quaternion, Vector3},
 };
 
 use crate::services::{GameObjectService, GameObjectServiceMut};
-use super::Component;
+use super::InternalComponent;
 
 pub struct ControllablePhysicsComponent {
 	position: Vector3,
 	rotation: Quaternion,
 }
 
-impl Component for ControllablePhysicsComponent {
-	fn new(config: &LuNameValue) -> Box<dyn Component> {
+impl InternalComponent for ControllablePhysicsComponent {
+	type ComponentProtocol = ControllablePhysicsProtocol;
+
+	fn new(config: &LuNameValue) -> Self {
 		let pos_x = if let Some(LnvValue::F32(x)) = config.get(&lu!("position_x")) { *x } else { 156.0 };
 		let pos_y = if let Some(LnvValue::F32(x)) = config.get(&lu!("position_y")) { *x } else { 380.0 };
 		let pos_z = if let Some(LnvValue::F32(x)) = config.get(&lu!("position_z")) { *x } else { -187.0 };
@@ -25,14 +25,14 @@ impl Component for ControllablePhysicsComponent {
 		let rot_z = if let Some(LnvValue::F32(x)) = config.get(&lu!("rotation_z")) { *x } else { 0.0 };
 		let rot_w = if let Some(LnvValue::F32(x)) = config.get(&lu!("rotation_w")) { *x } else { 0.0 };
 
-		Box::new(Self {
+		Self {
 			position: Vector3 { x: pos_x, y: pos_y, z: pos_z },
 			rotation: Quaternion { x: rot_x, y: rot_y, z: rot_z, w: rot_w },
-		})
+		}
 	}
 
-	fn make_construction(&self) -> Box<dyn ComponentConstruction> {
-		Box::new(ControllablePhysicsConstruction {
+	fn make_construction(&self) -> ControllablePhysicsConstruction {
+		ControllablePhysicsConstruction {
 			jetpack_info: None,
 			stun_immunity_info: None,
 			cheat_info: None,
@@ -47,7 +47,27 @@ impl Component for ControllablePhysicsComponent {
 				angular_velocity: None,
 				local_space_info: None,
 			}),
-		})
+		}
+	}
+
+	fn make_serialization(&self) -> ControllablePhysicsSerialization {
+		ControllablePhysicsSerialization {
+			cheat_info: None,
+			unknown_1: None,
+			unknown_2: None,
+			frame_stats_teleport_info: Some(FrameStatsTeleportInfo {
+				frame_stats: FrameStats {
+					position: self.position,
+					rotation: self.rotation,
+					is_on_ground: true,
+					is_on_rail: false,
+					linear_velocity: None,
+					angular_velocity: None,
+					local_space_info: None,
+				},
+				is_teleporting: false,
+			}),
+		}
 	}
 
 	fn run_service(&self, service: &mut GameObjectService) {
