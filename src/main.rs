@@ -20,23 +20,23 @@ use lu_packets::{
 use crate::listeners::MsgCallback;
 
 #[derive(Deserialize)]
-pub struct Config {
-	pub db: DbConf,
-	pub cdclient: CdclientConf,
-	pub tls: TlsConf,
+struct Config {
+	db: DbConf,
+	cdclient: CdclientConf,
+	tls: TlsConf,
 }
 
 #[derive(Deserialize)]
-pub struct DbConf {
-	pub path: String,
+struct DbConf {
+	path: String,
 }
 
 #[derive(Deserialize)]
-pub struct CdclientConf {
-	pub path: String,
+struct CdclientConf {
+	path: String,
 }
 
-pub fn load_config() -> Config {
+fn load_config() -> Config {
 	let mut exe_path = std::env::current_exe().expect("program location unknown");
 	exe_path.pop();
 	exe_path.push("config.toml");
@@ -51,7 +51,7 @@ fn main() {
 	let config = load_config();
 	let tls_config = create_tls_config(config.tls);
 	let mut listener = MsgCallback::new(&config.cdclient.path, &config.db.path);
-	let mut server = Server::<IncMessage, OutMessage, _>::new("0.0.0.0:10000", tls_config, |i, o| MsgCallback::on_msg(&mut listener, i, o)).unwrap();
+	let mut server = Server::<IncMessage, OutMessage, _>::new("0.0.0.0:10000", tls_config, |i, o| listener.on_msg(i, o)).unwrap();
 	println!("Started up");
 	server.run();
 }

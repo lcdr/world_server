@@ -27,7 +27,7 @@ use lu_packets::{
 
 use crate::listeners::Context;
 use crate::listeners::MsgCallback;
-use crate::services::GameObjectService;
+use crate::services::{GameObjectService, GameObjectServiceMut};
 use self::bbb::BbbComponent;
 use self::buff::BuffComponent;
 use self::character::CharacterComponent;
@@ -50,6 +50,7 @@ trait Component {
 	}
 	fn on_game_message(&mut self, _msg: &ServerGM, _game_object: &mut GameObject, _server: &mut MsgCallback, _ctx: &mut Context) {}
 	fn run_service(&self, _service: &mut GameObjectService) {}
+	fn run_service_mut(&mut self, _service: &mut GameObjectServiceMut) {}
 }
 
 pub struct GameObject {
@@ -207,6 +208,13 @@ impl GameObject {
 		let mut go_service = service.into();
 		for comp in &self.components {
 			comp.run_service(&mut go_service);
+		}
+	}
+
+	pub fn run_service_mut<'a, S: Into<GameObjectServiceMut<'a>>>(&mut self, service: S) {
+		let mut go_service = service.into();
+		for comp in &mut self.components {
+			comp.run_service_mut(&mut go_service);
 		}
 	}
 }

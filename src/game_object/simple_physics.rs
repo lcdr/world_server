@@ -29,11 +29,7 @@ impl Component for SimplePhysicsComponent {
 			velocity_info: None,
 			motion_type: None,
 			position_rotation_info: Some(PositionRotationInfo {
-				position: Vector3 {
-					x: self.position.x,
-					y: self.position.y,
-					z: self.position.z,
-				},
+				position: self.position,
 				rotation: Quaternion {
 					x: 0.0,
 					y: 0.7334349751472473,

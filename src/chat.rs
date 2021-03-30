@@ -2,13 +2,13 @@ use std::io::Result as Res;
 
 use lu_packets::{
 	amf3, lnv, lu,
-	world::Vector3,
+	world::{Quaternion, Vector3},
 	world::gm::client::{SetJetPackMode, UiMessageServerToSingleClient},
 };
 
 use crate::game_object::GameObject;
 use crate::listeners::{Context, MsgCallback};
-use crate::services::GetPosition;
+use crate::services::{GetPosition, GetRotation};
 
 pub fn on_chat_command(server: &mut MsgCallback, string: &str, sender: &GameObject, ctx: &mut Context) {
 	let args: Vec<_> = string.split_whitespace().collect();
@@ -86,19 +86,18 @@ fn spawn_cmd(server: &mut MsgCallback, sender: &GameObject, ctx: &mut Context, a
 		return Ok(());
 	}
 	let lot = args[1].parse().unwrap();
-	let mut get_pos = GetPosition {
-		position: Vector3 {
-			x: 0.0,
-			y: 0.0,
-			z: 0.0,
-		}
-	};
+	let mut get_pos = GetPosition(Vector3::ZERO);
 	sender.run_service(&mut get_pos);
-	dbg!(&get_pos);
+	let mut get_rot = GetRotation(Quaternion::IDENTITY);
+	sender.run_service(&mut get_rot);
 	let config = lnv!(
-		"position_x": get_pos.position.x,
-		"position_y": get_pos.position.y,
-		"position_z": get_pos.position.z,
+		"position_x": get_pos.0.x,
+		"position_y": get_pos.0.y,
+		"position_z": get_pos.0.z,
+		"rotation_x": get_rot.0.x,
+		"rotation_y": get_rot.0.y,
+		"rotation_z": get_rot.0.z,
+		"rotation_w": get_rot.0.w,
 	);
 	let game_object = server.spawn(lot, &config);
 

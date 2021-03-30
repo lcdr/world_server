@@ -15,7 +15,7 @@ use lu_packets::{
 	world::client::{CharListChar, CharacterListResponse, CharacterCreateResponse, CharacterDeleteResponse, ChatModerationString, CreateCharacter, InstanceType, LoadStaticZone, Message as OutMessage},
 	world::gm::client::GameMessage as ClientGM,
 	world::gm::server::{SubjectGameMessage as ServerSGM},
-	world::server::{CharacterCreateRequest, CharacterDeleteRequest, CharacterLoginRequest, ClientValidation, LevelLoadComplete, Message as IncMessage, StringCheck, WorldMessage},
+	world::server::{CharacterCreateRequest, CharacterDeleteRequest, CharacterLoginRequest, ClientValidation, LevelLoadComplete, Message as IncMessage, PositionUpdate, StringCheck, WorldMessage},
 };
 use lu_packets::common::ServiceId;
 use base_server::listeners::{on_conn_req, on_internal_ping, on_handshake};
@@ -25,8 +25,13 @@ use crate::game_object::GameObject;
 use crate::models::Character;
 pub type Context = C<IncMessage, OutMessage>;
 
+pub struct AccountInfo {
+	username: String,
+	active_character_id: ObjId,
+}
+
 pub struct MsgCallback {
-	validated: HashMap<SocketAddr, String>,
+	validated: HashMap<SocketAddr, AccountInfo>,
 	game_objects: HashMap<ObjId, GameObject>,
 	current_spawned_id: ObjId,
 	current_persistent_id: ObjId,
@@ -93,39 +98,42 @@ impl MsgCallback {
 			return;
 		}
 		let peer_addr = ctx.peer_addr().unwrap();
-		self.validated.insert(peer_addr, username);
+		self.validated.insert(peer_addr, AccountInfo { username, active_character_id: 0 });
 	}
 
 	fn on_restricted_msg(&mut self, msg: &WorldMessage, ctx: &mut Context) {
-		let username = match self.validated.get(&ctx.peer_addr().unwrap()) {
+		let addr = ctx.peer_addr().unwrap();
+		let mut acc_info = match self.validated.remove(&addr) {
 			None =>  {
 			println!("Restricted packet from unvalidated client!");
 			ctx.send(DisconnectNotify::InvalidSessionKey).unwrap();
 			ctx.close_conn();
 			return;
 			}
-			Some(u) => u,
+			Some(info) => info,
 		};
 
 		use lu_packets::world::server::WorldMessage::*;
 		match msg {
-			CharacterListRequest        => self.on_char_list_req(&username, ctx),
-			CharacterCreateRequest(msg) => self.on_char_create_req(msg, &username, ctx),
-			CharacterLoginRequest(msg)  => self.on_char_login_req(msg, &username, ctx),
-			CharacterDeleteRequest(msg) => self.on_char_del_req(msg, &username, ctx),
+			CharacterListRequest        => self.on_char_list_req(&acc_info, ctx),
+			CharacterCreateRequest(msg) => self.on_char_create_req(msg, &acc_info, ctx),
+			CharacterLoginRequest(msg)  => self.on_char_login_req(msg, &acc_info, ctx),
+			CharacterDeleteRequest(msg) => self.on_char_del_req(msg, &acc_info, ctx),
 			SubjectGameMessage(msg)     => self.on_subject_game_msg(msg, ctx),
-			LevelLoadComplete(msg)      => self.on_level_load_complete(msg, ctx),
-			PositionUpdate(_)           => {}, // handle this some other time
+			LevelLoadComplete(msg)      => self.on_level_load_complete(msg, &mut acc_info, ctx),
+			PositionUpdate(msg)         => self.on_position_update(msg, &acc_info, ctx),
 			StringCheck(msg)            => self.on_string_check(msg, ctx),
 			_                           => { println!("Unrecognized packet: {:?}", msg); },
 		}
+
+		self.validated.insert(addr, acc_info);
 	}
 
-	fn on_char_list_req(&self, provided_username: &str, ctx: &mut Context) {
+	fn on_char_list_req(&self, acc_info: &AccountInfo, ctx: &mut Context) {
 		use crate::schema::characters::dsl::{characters, username};
 
 		let chars: Vec<Character> = characters
-		.filter(username.eq(provided_username))
+		.filter(username.eq(&acc_info.username))
 		.load(&self.conn).expect("Error loading characters");
 		let mut list_chars = vec![];
 
@@ -154,12 +162,12 @@ impl MsgCallback {
 		}).unwrap()
 	}
 
-	fn on_char_create_req(&self, msg: &CharacterCreateRequest, username: &str, ctx: &mut Context) {
+	fn on_char_create_req(&self, msg: &CharacterCreateRequest, acc_info: &AccountInfo, ctx: &mut Context) {
 		use crate::schema::characters::dsl::{characters};
 
 		let new_char = Character {
 			id: 0, // good id
-			username: username.to_string(),
+			username: acc_info.username.to_string(),
 			name: String::from(&msg.char_name),
 			torso_color: msg.torso_color as i32,
 			legs_color: msg.legs_color as i32,
@@ -182,10 +190,10 @@ impl MsgCallback {
 		}
 
 		ctx.send(CharacterCreateResponse::Success).unwrap();
-		self.on_char_list_req(username, ctx);
+		self.on_char_list_req(acc_info, ctx);
 	}
 
-	fn on_char_login_req(&self, _msg: &CharacterLoginRequest, _username: &str, ctx: &mut Context) {
+	fn on_char_login_req(&self, _msg: &CharacterLoginRequest, _acc_info: &AccountInfo, ctx: &mut Context) {
 		let lsz = LoadStaticZone {
 			zone_id: ZoneId { map_id: 1100, instance_id: 0, clone_id: 0 },
 			map_checksum: 0x49525511,
@@ -196,28 +204,31 @@ impl MsgCallback {
 		ctx.send(lsz).unwrap();
 	}
 
-	fn on_char_del_req(&self, msg: &CharacterDeleteRequest, provided_username: &str, ctx: &mut Context) {
+	fn on_char_del_req(&self, msg: &CharacterDeleteRequest, acc_info: &AccountInfo, ctx: &mut Context) {
 		use crate::schema::characters::dsl::{characters, id, username};
 
 		let success = delete(characters
-		.filter(username.eq(provided_username))
+		.filter(username.eq(&acc_info.username))
 		.filter(id.eq(msg.char_id as i32)))
 		.execute(&self.conn).is_ok();
 
 		if !success {
-			eprintln!("Error deleting character {} from user {}", msg.char_id, provided_username);
+			eprintln!("Error deleting character {} from user {}", msg.char_id, acc_info.username);
 		}
 
 		ctx.send(CharacterDeleteResponse { success }).unwrap();
 	}
 
-	fn on_level_load_complete(&mut self, _msg: &LevelLoadComplete, ctx: &mut Context) {
+	fn on_level_load_complete(&mut self, _msg: &LevelLoadComplete, acc_info: &mut AccountInfo, ctx: &mut Context) {
 		let chara = self.spawn_player();
+		let obj_id = chara.object_id();
+
+		acc_info.active_character_id = obj_id;
 
 		let mut xml = String::new();
 		chara.write_xml(&mut xml).unwrap();
 
-		let obj_id = chara.object_id();
+
 		let name = &format!("{}", obj_id)[..];
 
 		let chardata = CreateCharacter { data: lnv! {
@@ -246,15 +257,15 @@ impl MsgCallback {
 	}
 
 	fn on_subject_game_msg(&mut self, msg: &ServerSGM, ctx: &mut Context) {
-		let mut game_object = match self.game_objects.remove(&msg.subject_id) {
-			Some(x) => x,
-			None => {
-				eprintln!("Game object {} does not exist!", msg.subject_id);
-				return;
-			}
-		};
-		game_object.on_game_message(&msg.message, self, ctx).unwrap();
-		self.game_objects.insert(msg.subject_id, game_object);
+		self.with_game_object(msg.subject_id, |server, game_object| {
+			game_object.on_game_message(&msg.message, server, ctx).unwrap();
+		});
+	}
+
+	fn on_position_update(&mut self, msg: &PositionUpdate, acc_info: &AccountInfo, _ctx: &mut Context) {
+		self.with_game_object(acc_info.active_character_id, |_server, game_object| {
+			game_object.run_service_mut(&msg.frame_stats);
+		});
 	}
 
 	fn on_string_check(&self, msg: &StringCheck, ctx: &mut Context) {
@@ -265,6 +276,18 @@ impl MsgCallback {
 			spans: vec![],
 		};
 		ctx.send(resp).unwrap();
+	}
+
+	fn with_game_object<F: FnOnce(&mut MsgCallback, &mut GameObject)>(&mut self, obj_id: ObjId, callback: F) {
+		let mut game_object = match self.game_objects.remove(&obj_id) {
+			Some(x) => x,
+			None => {
+				eprintln!("Game object {} does not exist!", obj_id);
+				return;
+			}
+		};
+		callback(self, &mut game_object);
+		self.game_objects.insert(obj_id, game_object);
 	}
 
 	fn new_spawned_id(&mut self) -> ObjId {
