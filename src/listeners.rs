@@ -1,6 +1,7 @@
 //! Message listeners responsible for the behavior of the server in response to incoming messages.
 use std::collections::HashMap;
 use std::convert::TryInto;
+use std::io::{Error, ErrorKind::Other, Result as Res};
 use std::net::SocketAddr;
 
 use diesel::prelude::*;
@@ -21,6 +22,7 @@ use lu_packets::common::ServiceId;
 use base_server::listeners::{on_conn_req, on_internal_ping, on_handshake};
 use base_server::server::Context as C;
 
+use crate::chat::on_general_chat_msg;
 use crate::game_object::GameObject;
 use crate::models::Character;
 pub type Context = C<IncMessage, OutMessage>;
@@ -73,42 +75,43 @@ impl MsgCallback {
 		match msg {
 			InternalPing(msg)                         => on_internal_ping::<IncMessage, OutMessage>(msg, ctx),
 			ConnectionRequest(msg)                    => on_conn_req::<IncMessage, OutMessage>(msg, ctx),
-			NewIncomingConnection(msg)                => { dbg!(msg); },
+			NewIncomingConnection(msg)                => { dbg!(msg); Ok(()) },
 			UserMessage(General(Handshake(msg)))      => on_handshake::<IncMessage, OutMessage>(msg, ctx, ServiceId::World),
 			UserMessage(World(ClientValidation(msg))) => self.on_client_val(msg, ctx),
 			UserMessage(World(msg))                   => self.on_restricted_msg(msg, ctx),
-			_                                         => { dbg!("do NOT contact me with unsolicited offers or services"); },
-		}
+			_                                         => { dbg!("do NOT contact me with unsolicited offers or services"); Ok(()) },
+		}.unwrap();
 	}
 
-	fn on_client_val(&mut self, cli_val: &ClientValidation, ctx: &mut Context) {
+	fn on_client_val(&mut self, cli_val: &ClientValidation, ctx: &mut Context) -> Res<()> {
 		let username = String::from(&cli_val.username);
 		let session_key = String::from(&cli_val.session_key);
 		let resp = minreq::get(format!("http://localhost:21835/verify/{}/{}", username, session_key)).send().unwrap();
 		if resp.status_code != 200 {
 			eprintln!("Error {} when trying to verify {} {} with the auth server!", resp.status_code, username, session_key);
-			ctx.send(DisconnectNotify::UnknownServerError).unwrap();
+			ctx.send(DisconnectNotify::UnknownServerError)?;
 			ctx.close_conn();
-			return;
+			return Ok(());
 		}
 		if resp.as_bytes() != b"1" {
 			println!("Login attempt from {} with invalid key {}!", username, session_key);
-			ctx.send(DisconnectNotify::InvalidSessionKey).unwrap();
+			ctx.send(DisconnectNotify::InvalidSessionKey)?;
 			ctx.close_conn();
-			return;
+			return Ok(());
 		}
 		let peer_addr = ctx.peer_addr().unwrap();
 		self.validated.insert(peer_addr, AccountInfo { username, active_character_id: 0 });
+		Ok(())
 	}
 
-	fn on_restricted_msg(&mut self, msg: &WorldMessage, ctx: &mut Context) {
+	fn on_restricted_msg(&mut self, msg: &WorldMessage, ctx: &mut Context) -> Res<()> {
 		let addr = ctx.peer_addr().unwrap();
 		let mut acc_info = match self.validated.remove(&addr) {
-			None =>  {
-			println!("Restricted packet from unvalidated client!");
-			ctx.send(DisconnectNotify::InvalidSessionKey).unwrap();
-			ctx.close_conn();
-			return;
+			None => {
+				println!("Restricted packet from unvalidated client!");
+				ctx.send(DisconnectNotify::InvalidSessionKey)?;
+				ctx.close_conn();
+				return Ok(());
 			}
 			Some(info) => info,
 		};
@@ -119,17 +122,20 @@ impl MsgCallback {
 			CharacterCreateRequest(msg) => self.on_char_create_req(msg, &acc_info, ctx),
 			CharacterLoginRequest(msg)  => self.on_char_login_req(msg, &acc_info, ctx),
 			CharacterDeleteRequest(msg) => self.on_char_del_req(msg, &acc_info, ctx),
+			GeneralChatMessage(msg)     => on_general_chat_msg(self, msg, &acc_info, ctx),
 			SubjectGameMessage(msg)     => self.on_subject_game_msg(msg, ctx),
 			LevelLoadComplete(msg)      => self.on_level_load_complete(msg, &mut acc_info, ctx),
 			PositionUpdate(msg)         => self.on_position_update(msg, &acc_info, ctx),
 			StringCheck(msg)            => self.on_string_check(msg, ctx),
-			_                           => { println!("Unrecognized packet: {:?}", msg); },
-		}
+			_                           => { println!("Unrecognized packet: {:?}", msg); Ok(()) },
+		}?;
 
 		self.validated.insert(addr, acc_info);
+
+		Ok(())
 	}
 
-	fn on_char_list_req(&self, acc_info: &AccountInfo, ctx: &mut Context) {
+	fn on_char_list_req(&self, acc_info: &AccountInfo, ctx: &mut Context) -> Res<()> {
 		use crate::schema::characters::dsl::{characters, username};
 
 		let chars: Vec<Character> = characters
@@ -159,10 +165,10 @@ impl MsgCallback {
 		ctx.send(CharacterListResponse {
 			selected_char: 0,
 			chars: list_chars,
-		}).unwrap()
+		})
 	}
 
-	fn on_char_create_req(&mut self, msg: &CharacterCreateRequest, acc_info: &AccountInfo, ctx: &mut Context) {
+	fn on_char_create_req(&mut self, msg: &CharacterCreateRequest, acc_info: &AccountInfo, ctx: &mut Context) -> Res<()> {
 		use crate::schema::characters::dsl::{characters};
 
 		let new_char = Character {
@@ -184,16 +190,15 @@ impl MsgCallback {
 		if let Err(e) = insert_into(characters)
 		.values(&new_char)
 		.execute(&self.conn) {
-			eprintln!("Error saving character: {}", e);
-			ctx.send(CharacterCreateResponse::GeneralFailure).unwrap();
-			return;
+			ctx.send(CharacterCreateResponse::GeneralFailure)?;
+			return Err(Error::new(Other, format!("Error saving character: {}", e)));
 		}
 
-		ctx.send(CharacterCreateResponse::Success).unwrap();
-		self.on_char_list_req(acc_info, ctx);
+		ctx.send(CharacterCreateResponse::Success)?;
+		self.on_char_list_req(acc_info, ctx)
 	}
 
-	fn on_char_login_req(&self, _msg: &CharacterLoginRequest, _acc_info: &AccountInfo, ctx: &mut Context) {
+	fn on_char_login_req(&self, _msg: &CharacterLoginRequest, _acc_info: &AccountInfo, ctx: &mut Context) -> Res<()> {
 		let lsz = LoadStaticZone {
 			zone_id: ZoneId { map_id: 1100, instance_id: 0, clone_id: 0 },
 			map_checksum: 0x49525511,
@@ -201,10 +206,10 @@ impl MsgCallback {
 			instance_type: InstanceType::Public,
 		};
 
-		ctx.send(lsz).unwrap();
+		ctx.send(lsz)
 	}
 
-	fn on_char_del_req(&self, msg: &CharacterDeleteRequest, acc_info: &AccountInfo, ctx: &mut Context) {
+	fn on_char_del_req(&self, msg: &CharacterDeleteRequest, acc_info: &AccountInfo, ctx: &mut Context) -> Res<()> {
 		use crate::schema::characters::dsl::{characters, id, username};
 
 		let success = delete(characters
@@ -216,11 +221,11 @@ impl MsgCallback {
 			eprintln!("Error deleting character {} from user {}", msg.char_id, acc_info.username);
 		}
 
-		ctx.send(CharacterDeleteResponse { success }).unwrap();
+		ctx.send(CharacterDeleteResponse { success })
 	}
 
-	fn on_level_load_complete(&mut self, _msg: &LevelLoadComplete, acc_info: &mut AccountInfo, ctx: &mut Context) {
-		let chara = self.spawn_player();
+	fn on_level_load_complete(&mut self, _msg: &LevelLoadComplete, acc_info: &mut AccountInfo, ctx: &mut Context) -> Res<()> {
+		let chara = self.spawn_player().unwrap();
 		let obj_id = chara.object_id();
 
 		acc_info.active_character_id = obj_id;
@@ -237,59 +242,64 @@ impl MsgCallback {
 			"name": name,
 			"xmlData": &xml[..],
 		}};
-		ctx.send(chardata).unwrap();
+		ctx.send(chardata)?;
 
 		for game_object in self.game_objects.values() {
 			let replica = game_object.make_construction();
-			ctx.broadcast(replica).unwrap();
+			ctx.broadcast(replica)?;
 		}
 
 		let chara = &self.game_objects[&obj_id];
 
 		let serverdone = chara.make_sgm(ClientGM::ServerDoneLoadingAllObjects);
-		ctx.send(serverdone).unwrap();
+		ctx.send(serverdone)?;
 
 		let playerready = chara.make_sgm(ClientGM::PlayerReady);
-		ctx.send(playerready).unwrap();
+		ctx.send(playerready)?;
 
 		let postload = chara.make_sgm(ClientGM::RestoreToPostLoadStats);
-		ctx.send(postload).unwrap();
+		ctx.send(postload)
 	}
 
-	fn on_subject_game_msg(&mut self, msg: &ServerSGM, ctx: &mut Context) {
+	fn on_subject_game_msg(&mut self, msg: &ServerSGM, ctx: &mut Context) -> Res<()> {
 		self.with_game_object(msg.subject_id, |server, game_object| {
-			game_object.on_game_message(&msg.message, server, ctx).unwrap();
-		});
+			game_object.on_game_message(&msg.message, server, ctx)
+		})
 	}
 
-	fn on_position_update(&mut self, msg: &PositionUpdate, acc_info: &AccountInfo, ctx: &mut Context) {
+	fn on_position_update(&mut self, msg: &PositionUpdate, acc_info: &AccountInfo, ctx: &mut Context) -> Res<()> {
 		self.with_game_object(acc_info.active_character_id, |_server, game_object| {
 			game_object.run_service_mut(&msg.frame_stats);
 			let ser = game_object.make_serialization();
-			ctx.broadcast(ser).unwrap();
-		});
+			ctx.broadcast(ser)
+		})
 	}
 
-	fn on_string_check(&self, msg: &StringCheck, ctx: &mut Context) {
+	fn on_string_check(&self, msg: &StringCheck, ctx: &mut Context) -> Res<()> {
 		let resp = ChatModerationString {
 			request_id: msg.request_id,
 			chat_mode: msg.chat_mode,
 			whisper_name: lu!(""),
 			spans: vec![],
 		};
-		ctx.send(resp).unwrap();
+		ctx.send(resp)
 	}
 
-	fn with_game_object<F: FnOnce(&mut MsgCallback, &mut GameObject)>(&mut self, obj_id: ObjId, callback: F) {
+	pub fn with_game_object<F: FnOnce(&mut MsgCallback, &mut GameObject) -> Res<()>>(&mut self, obj_id: ObjId, callback: F) -> Res<()> {
 		let mut game_object = match self.game_objects.remove(&obj_id) {
 			Some(x) => x,
 			None => {
 				eprintln!("Game object {} does not exist!", obj_id);
-				return;
+				return Ok(());
 			}
 		};
-		callback(self, &mut game_object);
+		callback(self, &mut game_object)?;
 		self.game_objects.insert(obj_id, game_object);
+		Ok(())
+	}
+
+	pub fn with_char<F: FnOnce(&mut MsgCallback, &mut GameObject) -> Res<()>>(&mut self, acc_info: &AccountInfo, callback: F) -> Res<()> {
+		self.with_game_object(acc_info.active_character_id, callback)
 	}
 
 	fn new_spawned_id(&mut self) -> ObjId {
@@ -307,19 +317,19 @@ impl MsgCallback {
 		return self.current_network_id;
 	}
 
-	fn spawn_player(&mut self) -> &GameObject {
+	fn spawn_player(&mut self) -> Res<&mut GameObject> {
 		self.spawn_internal(true, 1, &lnv!{})
 	}
 
-	pub fn spawn(&mut self, lot: Lot, config: &LuNameValue) -> &mut GameObject {
+	pub fn spawn(&mut self, lot: Lot, config: &LuNameValue) -> Res<&mut GameObject> {
 		self.spawn_internal(false, lot, config)
 	}
 
-	fn spawn_internal(&mut self, is_persistent: bool, lot: Lot, config: &LuNameValue) -> &mut GameObject {
+	fn spawn_internal(&mut self, is_persistent: bool, lot: Lot, config: &LuNameValue) -> Res<&mut GameObject> {
 		let network_id = self.new_network_id();
 		let obj_id = if is_persistent { self.new_persistent_id() } else { self.new_spawned_id() };
-		let game_object = GameObject::new(network_id, obj_id, lot, config, &self.cdclient);
+		let game_object = GameObject::new(network_id, obj_id, lot, config, &self.cdclient)?;
 		self.game_objects.insert(obj_id, game_object);
-		self.game_objects.get_mut(&obj_id).unwrap()
+		Ok(self.game_objects.get_mut(&obj_id).unwrap())
 	}
 }

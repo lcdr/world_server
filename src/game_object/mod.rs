@@ -12,7 +12,7 @@ mod script;
 mod simple_physics;
 mod skill;
 
-use std::io::Result as Res;
+use std::io::{Error, ErrorKind::NotFound, Result as Res};
 
 use rusqlite::{Connection as RusqliteConnection, params};
 
@@ -107,7 +107,7 @@ pub struct GameObject {
 const COMP_ORDER: [u32; 35] = [108, 61, 1, 30, 20, 3, 40, 98, 7, 110, 109, 106, 4, 26, 17, 5, 9, 60, 11, 48, 25, 16, 100, 102, 19, 39, 23, 75, 42, 6, 49, 2, 44, 71, 107];
 
 impl GameObject {
-	pub fn new(network_id: u16, object_id: ObjId, lot: Lot, config: &LuNameValue, cdclient: &RusqliteConnection) -> Self {
+	pub fn new(network_id: u16, object_id: ObjId, lot: Lot, config: &LuNameValue, cdclient: &RusqliteConnection) -> Res<Self> {
 
 		let mut stmt = cdclient.prepare("select component_type from componentsregistry where id = ?").unwrap();
 		let mut comps: Vec<u32> = stmt.query_map(params![lot], |row| row.get(0)).unwrap().map(|x| x.unwrap()).collect();
@@ -119,15 +119,15 @@ impl GameObject {
 		let mut final_comps = vec![];
 		Self::apply_component_overrides(&comps, &mut final_comps);
 
-		let components = Self::create_components(&final_comps, config);
+		let components = Self::create_components(&final_comps, config)?;
 
-		Self {
+		Ok(Self {
 			network_id,
 			object_id,
 			lot,
 			name: lu!(&format!("{}", object_id)[..]),
 			components,
-		}
+		})
 	}
 
 	fn apply_component_overrides(comps: &Vec<u32>, final_comps: &mut Vec<u32>) {
@@ -153,7 +153,7 @@ impl GameObject {
 		}
 	}
 
-	fn create_components(comps: &Vec<u32>, config: &LuNameValue) -> Vec<Box<dyn Component>> {
+	fn create_components(comps: &Vec<u32>, config: &LuNameValue) -> Res<Vec<Box<dyn Component>>> {
 		let mut components = vec![];
 
 		for comp in comps {
@@ -173,11 +173,14 @@ impl GameObject {
 					107 => BbbComponent::new_c,
 					109 => LevelProgressionComponent::new_c,
 					110 => PossessionControlComponent::new_c,
-					x => panic!("{}", x),
+					x => {
+						eprintln!("component type {} not implemented", x);
+						return Err(Error::new(NotFound, format!("component type {} not implemented", x)));
+					},
 				}(config));
 			}
 		}
-		components
+		Ok(components)
 	}
 
 	pub fn object_id(&self) -> ObjId {
