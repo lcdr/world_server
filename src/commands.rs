@@ -5,27 +5,13 @@ use lu_packets::{
 	chat::ChatChannel,
 	chat::client::GeneralChatMessage as ClientChatMessage,
 	world::gm::client::{SetJetPackMode, UiMessageServerToSingleClient},
-	world::server::GeneralChatMessage as ServerChatMessage,
 };
 
 use crate::game_object::GameObject;
-use crate::listeners::{AccountInfo, Context, MsgCallback};
+use crate::state::{Connection, State};
 use crate::services::{GetPosition, GetRotation};
 
-pub fn on_general_chat_msg(server: &mut MsgCallback, msg: &ServerChatMessage, acc_info: &AccountInfo, ctx: &mut Context) -> Res<()> {
-	server.with_char(acc_info, |_server, sender| {
-		ctx.broadcast(ClientChatMessage {
-			chat_channel: msg.chat_channel,
-			sender: sender.object_id(),
-			sender_name: lu!(""),
-			source_id: msg.source_id,
-			sender_gm_level: 0,
-			message: msg.message.clone().into(),
-		})
-	})
-}
-
-pub fn on_chat_command(server: &mut MsgCallback, string: &str, sender: &GameObject, ctx: &mut Context) {
+pub fn on_chat_command(state: &mut State, string: &str, sender: &GameObject, conn: &mut Connection) {
 	let args: Vec<_> = string.split_whitespace().collect();
 	let command = match &args[0][1..] {
 		"jetpack"   => jetpack_cmd,
@@ -36,8 +22,8 @@ pub fn on_chat_command(server: &mut MsgCallback, string: &str, sender: &GameObje
 		_           => nop_cmd,
 	};
 
-	if let Err(error) = command(server, sender, ctx, &args) {
-		ctx.send(system_message(&format!("Error in command: {}", error))).unwrap();
+	if let Err(error) = command(state, sender, conn, &args) {
+		conn.send(system_message(&format!("Error in command: {}", error))).unwrap();
 	}
 }
 
@@ -52,7 +38,7 @@ fn system_message(string: &str) -> ClientChatMessage {
 	}
 }
 
-fn jetpack_cmd(_server: &mut MsgCallback, sender: &GameObject, ctx: &mut Context, _args: &Vec<&str>) -> Res<()> {
+fn jetpack_cmd(_state: &mut State, sender: &GameObject, conn: &mut Connection, _args: &Vec<&str>) -> Res<()> {
 	let uimsg = sender.make_sgm(SetJetPackMode {
 		bypass_checks: true,
 		do_hover: false,
@@ -63,40 +49,40 @@ fn jetpack_cmd(_server: &mut MsgCallback, sender: &GameObject, ctx: &mut Context
 		vert_vel: 1.5,
 		warning_effect_id: -1,
 	});
-	ctx.send(uimsg)
+	conn.send(uimsg)
 }
 
-fn send_uidebug_cmd(_server: &mut MsgCallback, sender: &GameObject, ctx: &mut Context, _args: &Vec<&str>) -> Res<()> {
+fn send_uidebug_cmd(_state: &mut State, sender: &GameObject, conn: &mut Connection, _args: &Vec<&str>) -> Res<()> {
 	let uimsg = sender.make_sgm(UiMessageServerToSingleClient {
 		args: amf3! {
 			"visible": true,
 		},
 		message_name: lu!(b"ToggleUIDebugger"),
 	});
-	ctx.send(uimsg)
+	conn.send(uimsg)
 }
 
-fn send_gamestate_cmd(_server: &mut MsgCallback, sender: &GameObject, ctx: &mut Context, _args: &Vec<&str>) -> Res<()> {
+fn send_gamestate_cmd(_state: &mut State, sender: &GameObject, conn: &mut Connection, _args: &Vec<&str>) -> Res<()> {
 	let uimsg = sender.make_sgm(UiMessageServerToSingleClient {
 		args: amf3! {
 			"state": "Survival",
 		},
 		message_name: lu!(b"pushGameState"),
 	});
-	ctx.send(uimsg)
+	conn.send(uimsg)
 }
 
-fn send_toggle_scoreboard_cmd(_server: &mut MsgCallback, sender: &GameObject, ctx: &mut Context, _args: &Vec<&str>) -> Res<()> {
+fn send_toggle_scoreboard_cmd(_state: &mut State, sender: &GameObject, conn: &mut Connection, _args: &Vec<&str>) -> Res<()> {
 	let uimsg = sender.make_sgm(UiMessageServerToSingleClient {
 		args: amf3! {"visible": false},
 		message_name: lu!(b"ToggleSurvivalScoreboard"),
 	});
-	ctx.send(uimsg)?;
+	conn.send(uimsg)?;
 	let uimsg = sender.make_sgm(UiMessageServerToSingleClient {
 		args: amf3! {"visible": true},
 		message_name: lu!(b"ToggleSurvivalScoreboard"),
 	});
-	ctx.send(uimsg)?;
+	conn.send(uimsg)?;
 	let uimsg = sender.make_sgm(UiMessageServerToSingleClient {
 		args: amf3! {
 			"iplayerName": "Allies",
@@ -106,10 +92,10 @@ fn send_toggle_scoreboard_cmd(_server: &mut MsgCallback, sender: &GameObject, ct
 		},
 		message_name: lu!(b"UpdateSurvivalScoreboard"),
 	});
-	ctx.send(uimsg)
+	conn.send(uimsg)
 }
 
-fn spawn_cmd(server: &mut MsgCallback, sender: &GameObject, ctx: &mut Context, args: &Vec<&str>) -> Res<()> {
+fn spawn_cmd(state: &mut State, sender: &GameObject, conn: &mut Connection, args: &Vec<&str>) -> Res<()> {
 	if args.len() != 2 {
 		return Ok(());
 	}
@@ -127,12 +113,12 @@ fn spawn_cmd(server: &mut MsgCallback, sender: &GameObject, ctx: &mut Context, a
 		"rotation_z": get_rot.0.z,
 		"rotation_w": get_rot.0.w,
 	};
-	let game_object = server.spawn(lot, &config)?;
+	let game_object = state.spawn(lot, &config)?;
 
 	let replica = game_object.make_construction();
-	ctx.broadcast(replica)
+	conn.broadcast(replica)
 }
 
-fn nop_cmd(_server: &mut MsgCallback, _sender: &GameObject, _ctx: &mut Context, _args: &Vec<&str>) -> Res<()> {
+fn nop_cmd(_state: &mut State, _sender: &GameObject, _ctx: &mut Connection, _args: &Vec<&str>) -> Res<()> {
 	Ok(())
 }

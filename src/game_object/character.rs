@@ -5,7 +5,8 @@ use lu_packets::{
 	world::gm::server::{GameMessage as ServerGM, ParseChatMessage},
 };
 
-use crate::listeners::{Context, MsgCallback};
+use crate::state::Connection;
+use crate::state::State;
 use super::{InternalComponent, GameObject};
 
 pub struct CharacterComponent {
@@ -13,13 +14,13 @@ pub struct CharacterComponent {
 }
 
 impl CharacterComponent {
-	fn on_parse_chat_message(&mut self, msg: &ParseChatMessage, server: &mut MsgCallback, game_object: &mut GameObject, ctx: &mut Context) {
+	fn on_parse_chat_message(&mut self, msg: &ParseChatMessage, state: &mut State, game_object: &mut GameObject, conn: &mut Connection) {
 		use lu_packets::common::LuStrExt;
 		let string = msg.string.to_string();
 
 		if string.starts_with("/") {
 			dbg!(msg);
-			crate::chat::on_chat_command(server, &string, game_object, ctx);
+			crate::commands::on_chat_command(state, &string, game_object, conn);
 		}
 	}
 }
@@ -102,10 +103,10 @@ impl InternalComponent for CharacterComponent {
 		}
 	}
 
-	fn on_game_message(&mut self, msg: &ServerGM, game_object: &mut GameObject, server: &mut MsgCallback, ctx: &mut Context) {
+	fn on_game_message(&mut self, msg: &ServerGM, game_object: &mut GameObject, state: &mut State, conn: &mut Connection) {
 		dbg!(msg);
 		match msg {
-			ServerGM::ParseChatMessage(x) => self.on_parse_chat_message(x, server, game_object, ctx),
+			ServerGM::ParseChatMessage(x) => self.on_parse_chat_message(x, state, game_object, conn),
 			_ => {}
 		}
 	}

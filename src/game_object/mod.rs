@@ -25,9 +25,9 @@ use lu_packets::{
 	world::gm::server::GameMessage as ServerGM,
 };
 
-use crate::listeners::Context;
-use crate::listeners::MsgCallback;
+use crate::state::Connection;
 use crate::services::{GameObjectService, GameObjectServiceMut};
+use crate::state::State;
 use self::bbb::BbbComponent;
 use self::buff::BuffComponent;
 use self::character::CharacterComponent;
@@ -51,7 +51,7 @@ trait InternalComponent {
 	fn write_xml(&self, _writer: &mut String) -> std::fmt::Result {
 		Ok(())
 	}
-	fn on_game_message(&mut self, _msg: &ServerGM, _game_object: &mut GameObject, _server: &mut MsgCallback, _ctx: &mut Context) {}
+	fn on_game_message(&mut self, _msg: &ServerGM, _game_object: &mut GameObject, _state: &mut State, _ctx: &mut Connection) {}
 	fn run_service(&self, _service: &mut GameObjectService) {}
 	fn run_service_mut(&mut self, _service: &mut GameObjectServiceMut) {}
 }
@@ -61,7 +61,7 @@ trait Component {
 	fn make_construction(&self) -> Box<dyn ComponentConstruction>;
 	fn make_serialization(&self) -> Box<dyn ComponentSerialization>;
 	fn write_xml(&self, _writer: &mut String) -> std::fmt::Result;
-	fn on_game_message(&mut self, _msg: &ServerGM, _game_object: &mut GameObject, _server: &mut MsgCallback, _ctx: &mut Context);
+	fn on_game_message(&mut self, _msg: &ServerGM, _game_object: &mut GameObject, _state: &mut State, _ctx: &mut Connection);
 	fn run_service(&self, _service: &mut GameObjectService);
 	fn run_service_mut(&mut self, _service: &mut GameObjectServiceMut);
 }
@@ -83,8 +83,8 @@ impl<I: 'static+InternalComponent> Component for I {
 		<I as InternalComponent>::write_xml(self, writer)
 	}
 
-	fn on_game_message(&mut self, msg: &ServerGM, game_object: &mut GameObject, server: &mut MsgCallback, ctx: &mut Context) {
-		<I as InternalComponent>::on_game_message(self, msg, game_object, server, ctx)
+	fn on_game_message(&mut self, msg: &ServerGM, game_object: &mut GameObject, state: &mut State, conn: &mut Connection) {
+		<I as InternalComponent>::on_game_message(self, msg, game_object, state, conn)
 	}
 
 	fn run_service(&self, service: &mut GameObjectService) {
@@ -247,12 +247,12 @@ impl GameObject {
 		}
 	}
 
-	pub fn on_game_message(&mut self, msg: &ServerGM, server: &mut MsgCallback, ctx: &mut Context) -> Res<()> {
+	pub fn on_game_message(&mut self, msg: &ServerGM, state: &mut State, conn: &mut Connection) -> Res<()> {
 		dbg!(msg);
 
 		for i in 0..self.components.len() {
 			let mut comp = self.components.swap_remove(i);
-			comp.on_game_message(msg, self, server, ctx);
+			comp.on_game_message(msg, self, state, conn);
 			self.components.push(comp);
 			if i > 0 {
 				self.components.swap(i, i-1);

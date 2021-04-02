@@ -2,12 +2,13 @@
 #[macro_use]
 extern crate diesel;
 
-mod chat;
+mod commands;
 mod game_object;
 mod listeners;
 mod models;
 mod schema;
 mod services;
+mod state;
 
 use serde::Deserialize;
 
@@ -17,7 +18,7 @@ use lu_packets::{
 	world::server::Message as IncMessage,
 };
 
-use crate::listeners::MsgCallback;
+use crate::state::State;
 
 #[derive(Deserialize)]
 struct Config {
@@ -50,8 +51,8 @@ fn load_config() -> Config {
 fn main() {
 	let config = load_config();
 	let tls_config = create_tls_config(config.tls);
-	let mut listener = MsgCallback::new(&config.cdclient.path, &config.db.path);
-	let mut server = Server::<IncMessage, OutMessage, _>::new("0.0.0.0:10000", tls_config, |i, o| listener.on_msg(i, o)).unwrap();
+	let mut state = State::new(&config.cdclient.path, &config.db.path);
+	let mut server = Server::<IncMessage, OutMessage, _>::new("0.0.0.0:10000", tls_config, |i, o| state.on_msg(i, o)).unwrap();
 	println!("Started up");
 	server.run();
 }
