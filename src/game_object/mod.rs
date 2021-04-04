@@ -51,9 +51,9 @@ trait InternalComponent {
 	fn write_xml(&self, _writer: &mut String) -> std::fmt::Result {
 		Ok(())
 	}
-	fn on_game_message(&mut self, _msg: &ServerGM, _game_object: &mut GameObject, _state: &mut State, _ctx: &mut Connection) {}
-	fn run_service(&self, _service: &mut GameObjectService) {}
-	fn run_service_mut(&mut self, _service: &mut GameObjectServiceMut) {}
+	fn on_game_message(&mut self, _msg: &ServerGM, _game_object: &mut GameObject, _state: &mut State, _conn: &mut Connection) {}
+	fn run_service(&self, _service: &mut GameObjectService, _game_object: &GameObject) {}
+	fn run_service_mut(&mut self, _service: &mut GameObjectServiceMut, _game_object: &mut GameObject) -> Res<()> { Ok(()) }
 }
 
 trait Component {
@@ -61,9 +61,9 @@ trait Component {
 	fn make_construction(&self) -> Box<dyn ComponentConstruction>;
 	fn make_serialization(&self) -> Box<dyn ComponentSerialization>;
 	fn write_xml(&self, _writer: &mut String) -> std::fmt::Result;
-	fn on_game_message(&mut self, _msg: &ServerGM, _game_object: &mut GameObject, _state: &mut State, _ctx: &mut Connection);
-	fn run_service(&self, _service: &mut GameObjectService);
-	fn run_service_mut(&mut self, _service: &mut GameObjectServiceMut);
+	fn on_game_message(&mut self, _msg: &ServerGM, _game_object: &mut GameObject, _state: &mut State, _conn: &mut Connection);
+	fn run_service(&self, _service: &mut GameObjectService, _game_object: &GameObject);
+	fn run_service_mut(&mut self, _service: &mut GameObjectServiceMut, _game_object: &mut GameObject) -> Res<()>;
 }
 
 impl<I: 'static+InternalComponent> Component for I {
@@ -87,12 +87,12 @@ impl<I: 'static+InternalComponent> Component for I {
 		<I as InternalComponent>::on_game_message(self, msg, game_object, state, conn)
 	}
 
-	fn run_service(&self, service: &mut GameObjectService) {
-		<I as InternalComponent>::run_service(self, service)
+	fn run_service(&self, service: &mut GameObjectService, game_object: &GameObject) {
+		<I as InternalComponent>::run_service(self, service, game_object)
 	}
 
-	fn run_service_mut(&mut self, service: &mut GameObjectServiceMut) {
-		<I as InternalComponent>::run_service_mut(self, service)
+	fn run_service_mut(&mut self, service: &mut GameObjectServiceMut, game_object: &mut GameObject) -> Res<()> {
+		<I as InternalComponent>::run_service_mut(self, service, game_object)
 	}
 }
 
@@ -264,14 +264,21 @@ impl GameObject {
 	pub fn run_service<'a, S: Into<GameObjectService<'a>>>(&self, service: S) {
 		let mut go_service = service.into();
 		for comp in &self.components {
-			comp.run_service(&mut go_service);
+			comp.run_service(&mut go_service, self);
 		}
 	}
 
-	pub fn run_service_mut<'a, S: Into<GameObjectServiceMut<'a>>>(&mut self, service: S) {
+	pub fn run_service_mut<'a, S: Into<GameObjectServiceMut<'a>>>(&mut self, service: S) -> Res<()> {
 		let mut go_service = service.into();
-		for comp in &mut self.components {
-			comp.run_service_mut(&mut go_service);
+
+		for i in 0..self.components.len() {
+			let mut comp = self.components.swap_remove(i);
+			comp.run_service_mut(&mut go_service, self)?;
+			self.components.push(comp);
+			if i > 0 {
+				self.components.swap(i, i-1);
+			}
 		}
+		Ok(())
 	}
 }

@@ -5,7 +5,7 @@ use lu_packets::{
 };
 
 use crate::services::GameObjectService;
-use super::InternalComponent;
+use super::{GameObject, InternalComponent};
 
 pub struct SimplePhysicsComponent {
 	position: Vector3,
@@ -51,7 +51,7 @@ impl InternalComponent for SimplePhysicsComponent {
 		}
 	}
 
-	fn run_service(&self, service: &mut GameObjectService) {
+	fn run_service(&self, service: &mut GameObjectService, _game_object: &GameObject) {
 		match service {
 			GameObjectService::GetPosition(x) => {
 				x.0 = self.position;

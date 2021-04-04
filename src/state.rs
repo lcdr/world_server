@@ -148,7 +148,7 @@ impl State {
 		self.with_game_object(acc_info.active_character_id, callback)
 	}
 
-	fn new_spawned_id(&mut self) -> ObjId {
+	pub fn new_spawned_id(&mut self) -> ObjId {
 		self.current_spawned_id += 1;
 		return self.current_spawned_id;
 	}

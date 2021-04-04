@@ -1,3 +1,5 @@
+use std::io::Result as Res;
+
 use lu_packets::{
 	lu,
 	raknet::client::replica::controllable_physics::{ControllablePhysicsConstruction, ControllablePhysicsProtocol, ControllablePhysicsSerialization, FrameStats, FrameStatsTeleportInfo},
@@ -5,7 +7,7 @@ use lu_packets::{
 };
 
 use crate::services::{GameObjectService, GameObjectServiceMut};
-use super::InternalComponent;
+use super::{GameObject, InternalComponent};
 
 pub struct ControllablePhysicsComponent {
 	position: Vector3,
@@ -78,7 +80,7 @@ impl InternalComponent for ControllablePhysicsComponent {
 		}
 	}
 
-	fn run_service(&self, service: &mut GameObjectService) {
+	fn run_service(&self, service: &mut GameObjectService, _game_object: &GameObject) {
 		match service {
 			GameObjectService::GetPosition(x) => {
 				x.0 = self.position;
@@ -90,7 +92,7 @@ impl InternalComponent for ControllablePhysicsComponent {
 		}
 	}
 
-	fn run_service_mut(&mut self, service: &mut GameObjectServiceMut) {
+	fn run_service_mut(&mut self, service: &mut GameObjectServiceMut, _game_object: &mut GameObject) -> Res<()> {
 		match service {
 			GameObjectServiceMut::SetFrameStats(frame_stats) => {
 				self.position = frame_stats.position;
@@ -102,5 +104,6 @@ impl InternalComponent for ControllablePhysicsComponent {
 			},
 			_ => {},
 		}
+		Ok(())
 	}
 }

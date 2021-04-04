@@ -9,14 +9,15 @@ use lu_packets::{
 
 use crate::game_object::GameObject;
 use crate::state::{Connection, State};
-use crate::services::{GetPosition, GetRotation};
+use crate::services::{AddItem, GetPosition, GetRotation};
 
-pub fn on_chat_command(state: &mut State, string: &str, sender: &GameObject, conn: &mut Connection) {
+pub fn on_chat_command(state: &mut State, string: &str, sender: &mut GameObject, conn: &mut Connection) {
 	let args: Vec<_> = string.split_whitespace().collect();
 	let command = match &args[0][1..] {
+		"additem"   => add_item_cmd,
+		"gamestate" => send_gamestate_cmd,
 		"jetpack"   => jetpack_cmd,
 		"uidebug"   => send_uidebug_cmd,
-		"gamestate" => send_gamestate_cmd,
 		"toggle"    => send_toggle_scoreboard_cmd,
 		"spawn"     => spawn_cmd,
 		_           => nop_cmd,
@@ -38,7 +39,16 @@ fn system_message(string: &str) -> ClientChatMessage {
 	}
 }
 
-fn jetpack_cmd(_state: &mut State, sender: &GameObject, conn: &mut Connection, _args: &Vec<&str>) -> Res<()> {
+fn add_item_cmd(state: &mut State, sender: &mut GameObject, conn: &mut Connection, args: &Vec<&str>) -> Res<()> {
+	if args.len() != 2 {
+		return Ok(());
+	}
+	let lot = args[1].parse().unwrap();
+	let mut add_item = AddItem { lot, state, conn };
+	sender.run_service_mut(&mut add_item)
+}
+
+fn jetpack_cmd(_state: &mut State, sender: &mut GameObject, conn: &mut Connection, _args: &Vec<&str>) -> Res<()> {
 	let uimsg = sender.make_sgm(SetJetPackMode {
 		bypass_checks: true,
 		do_hover: false,
@@ -52,7 +62,7 @@ fn jetpack_cmd(_state: &mut State, sender: &GameObject, conn: &mut Connection, _
 	conn.send(uimsg)
 }
 
-fn send_uidebug_cmd(_state: &mut State, sender: &GameObject, conn: &mut Connection, _args: &Vec<&str>) -> Res<()> {
+fn send_uidebug_cmd(_state: &mut State, sender: &mut GameObject, conn: &mut Connection, _args: &Vec<&str>) -> Res<()> {
 	let uimsg = sender.make_sgm(UiMessageServerToSingleClient {
 		args: amf3! {
 			"visible": true,
@@ -62,7 +72,7 @@ fn send_uidebug_cmd(_state: &mut State, sender: &GameObject, conn: &mut Connecti
 	conn.send(uimsg)
 }
 
-fn send_gamestate_cmd(_state: &mut State, sender: &GameObject, conn: &mut Connection, _args: &Vec<&str>) -> Res<()> {
+fn send_gamestate_cmd(_state: &mut State, sender: &mut GameObject, conn: &mut Connection, _args: &Vec<&str>) -> Res<()> {
 	let uimsg = sender.make_sgm(UiMessageServerToSingleClient {
 		args: amf3! {
 			"state": "Survival",
@@ -72,7 +82,7 @@ fn send_gamestate_cmd(_state: &mut State, sender: &GameObject, conn: &mut Connec
 	conn.send(uimsg)
 }
 
-fn send_toggle_scoreboard_cmd(_state: &mut State, sender: &GameObject, conn: &mut Connection, _args: &Vec<&str>) -> Res<()> {
+fn send_toggle_scoreboard_cmd(_state: &mut State, sender: &mut GameObject, conn: &mut Connection, _args: &Vec<&str>) -> Res<()> {
 	let uimsg = sender.make_sgm(UiMessageServerToSingleClient {
 		args: amf3! {"visible": false},
 		message_name: lu!(b"ToggleSurvivalScoreboard"),
@@ -95,7 +105,7 @@ fn send_toggle_scoreboard_cmd(_state: &mut State, sender: &GameObject, conn: &mu
 	conn.send(uimsg)
 }
 
-fn spawn_cmd(state: &mut State, sender: &GameObject, conn: &mut Connection, args: &Vec<&str>) -> Res<()> {
+fn spawn_cmd(state: &mut State, sender: &mut GameObject, conn: &mut Connection, args: &Vec<&str>) -> Res<()> {
 	if args.len() != 2 {
 		return Ok(());
 	}
@@ -119,6 +129,6 @@ fn spawn_cmd(state: &mut State, sender: &GameObject, conn: &mut Connection, args
 	conn.broadcast(replica)
 }
 
-fn nop_cmd(_state: &mut State, _sender: &GameObject, _ctx: &mut Connection, _args: &Vec<&str>) -> Res<()> {
-	Ok(())
+fn nop_cmd(_state: &mut State, _sender: &mut GameObject, conn: &mut Connection, _args: &Vec<&str>) -> Res<()> {
+	conn.send(system_message("Unknown command."))
 }
