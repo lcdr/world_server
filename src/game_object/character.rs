@@ -1,8 +1,11 @@
+use std::io::Result as Res;
+
 use lu_packets::{
 	lu,
 	raknet::client::replica::character::{CharacterConstruction, CharacterProtocol, CharacterSerialization, GameActivity, GmPvpInfo, SocialInfo, TransitionState},
 	world::LuNameValue,
-	world::gm::server::{GameMessage as ServerGM, ParseChatMessage},
+	world::gm::client::EmotePlayed,
+	world::gm::server::{GameMessage as ServerGM, ParseChatMessage, PlayEmote},
 };
 
 use crate::state::Connection;
@@ -14,7 +17,7 @@ pub struct CharacterComponent {
 }
 
 impl CharacterComponent {
-	fn on_parse_chat_message(&mut self, msg: &ParseChatMessage, game_object: &mut GameObject, state: &mut State, conn: &mut Connection) {
+	fn on_parse_chat_message(&mut self, msg: &ParseChatMessage, game_object: &mut GameObject, state: &mut State, conn: &mut Connection) -> Res<()> {
 		use lu_packets::common::LuStrExt;
 		let string = msg.string.to_string();
 
@@ -22,6 +25,15 @@ impl CharacterComponent {
 			dbg!(msg);
 			crate::commands::on_chat_command(state, &string, game_object, conn);
 		}
+		Ok(())
+	}
+
+	fn on_play_emote(&mut self, msg: &PlayEmote, game_object: &mut GameObject, _state: &mut State, conn: &mut Connection) -> Res<()> {
+		let emote_played = game_object.make_sgm(EmotePlayed {
+			emote_id: msg.emote_id,
+			target_id: msg.target_id,
+		});
+		conn.broadcast(emote_played)
 	}
 }
 
@@ -38,14 +50,14 @@ impl InternalComponent for CharacterComponent {
 			claim_code_2: None,
 			claim_code_3: None,
 			claim_code_4: None,
-			hair_color: 11,
-			hair_style: 6,
-			torso_color: 1,
-			legs_color: 6,
+			hair_color: 9,
+			hair_style: 9,
+			torso_color: 9,
+			legs_color: 14,
 			torso_decal: 24,
-			eyebrows_style: 38,
-			eyes_style: 22,
-			mouth_style: 24,
+			eyebrows_style: 21,
+			eyes_style: 8,
+			mouth_style: 6,
 			account_id: 104116,
 			last_logout: 0,
 			prop_mod_last_display_time: 0,
@@ -103,10 +115,11 @@ impl InternalComponent for CharacterComponent {
 		}
 	}
 
-	fn on_game_message(&mut self, msg: &ServerGM, game_object: &mut GameObject, state: &mut State, conn: &mut Connection) {
+	fn on_game_message(&mut self, msg: &ServerGM, game_object: &mut GameObject, state: &mut State, conn: &mut Connection) -> Res<()> {
 		match msg {
 			ServerGM::ParseChatMessage(x) => self.on_parse_chat_message(x, game_object, state, conn),
-			_ => {}
+			ServerGM::PlayEmote(x) => self.on_play_emote(x, game_object, state, conn),
+			_ => Ok(()),
 		}
 	}
 }

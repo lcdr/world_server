@@ -23,12 +23,13 @@ pub struct InventoryComponent {
 }
 
 impl InventoryComponent {
-	fn on_equip_inventory(&mut self, msg: &EquipInventory, game_object: &mut GameObject, state: &mut State, conn: &mut Connection) {
+	fn on_equip_inventory(&mut self, msg: &EquipInventory, game_object: &mut GameObject, state: &mut State, conn: &mut Connection) -> Res<()> {
 		for item in &self.items {
 			if item.object_id == msg.item_to_equip {
 
 			}
 		}
+		Ok(())
 	}
 }
 
@@ -128,10 +129,10 @@ impl InternalComponent for InventoryComponent {
 		Ok(())
 	}
 
-	fn on_game_message(&mut self, msg: &ServerGM, game_object: &mut GameObject, state: &mut State, conn: &mut Connection) {
+	fn on_game_message(&mut self, msg: &ServerGM, game_object: &mut GameObject, state: &mut State, conn: &mut Connection) -> Res<()> {
 		match msg {
 			ServerGM::EquipInventory(x) => self.on_equip_inventory(x, game_object, state, conn),
-			_ => {}
+			_ => Ok(()),
 		}
 	}
 }

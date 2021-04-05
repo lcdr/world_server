@@ -20,7 +20,8 @@ pub fn on_chat_command(state: &mut State, string: &str, sender: &mut GameObject,
 		"uidebug"   => send_uidebug_cmd,
 		"toggle"    => send_toggle_scoreboard_cmd,
 		"spawn"     => spawn_cmd,
-		_           => nop_cmd,
+		"dance"     => nop_cmd,
+		_           => unknown_cmd,
 	};
 
 	if let Err(error) = command(state, sender, conn, &args) {
@@ -129,6 +130,10 @@ fn spawn_cmd(state: &mut State, sender: &mut GameObject, conn: &mut Connection, 
 	conn.broadcast(replica)
 }
 
-fn nop_cmd(_state: &mut State, _sender: &mut GameObject, conn: &mut Connection, _args: &Vec<&str>) -> Res<()> {
+fn nop_cmd(_state: &mut State, _sender: &mut GameObject, _conn: &mut Connection, _args: &Vec<&str>) -> Res<()> {
+	Ok(())
+}
+
+fn unknown_cmd(_state: &mut State, _sender: &mut GameObject, conn: &mut Connection, _args: &Vec<&str>) -> Res<()> {
 	conn.send(system_message("Unknown command."))
 }
