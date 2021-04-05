@@ -14,7 +14,7 @@ pub struct CharacterComponent {
 }
 
 impl CharacterComponent {
-	fn on_parse_chat_message(&mut self, msg: &ParseChatMessage, state: &mut State, game_object: &mut GameObject, conn: &mut Connection) {
+	fn on_parse_chat_message(&mut self, msg: &ParseChatMessage, game_object: &mut GameObject, state: &mut State, conn: &mut Connection) {
 		use lu_packets::common::LuStrExt;
 		let string = msg.string.to_string();
 
@@ -104,9 +104,8 @@ impl InternalComponent for CharacterComponent {
 	}
 
 	fn on_game_message(&mut self, msg: &ServerGM, game_object: &mut GameObject, state: &mut State, conn: &mut Connection) {
-		dbg!(msg);
 		match msg {
-			ServerGM::ParseChatMessage(x) => self.on_parse_chat_message(x, state, game_object, conn),
+			ServerGM::ParseChatMessage(x) => self.on_parse_chat_message(x, game_object, state, conn),
 			_ => {}
 		}
 	}

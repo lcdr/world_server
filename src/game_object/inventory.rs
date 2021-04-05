@@ -2,24 +2,41 @@ use std::io::Result as Res;
 
 use lu_packets::{
 	lnv,
+	common::ObjId,
 	raknet::client::replica::inventory::{EquippedItemInfo, InventoryConstruction, InventoryProtocol, InventorySerialization},
 	world::{LuNameValue, Vector3},
 	world::gm::InventoryType,
 	world::gm::client::{AddItemToInventoryClientSync, LootType},
+	world::gm::server::{GameMessage as ServerGM, EquipInventory},
 };
 
 use crate::services::GameObjectServiceMut;
+use crate::state::{Connection, State};
 use super::{GameObject, InternalComponent};
 
-pub struct InventoryComponent {
+struct Item {
+	object_id: ObjId,
+}
 
+pub struct InventoryComponent {
+	items: Vec<Item>,
+}
+
+impl InventoryComponent {
+	fn on_equip_inventory(&mut self, msg: &EquipInventory, game_object: &mut GameObject, state: &mut State, conn: &mut Connection) {
+		for item in &self.items {
+			if item.object_id == msg.item_to_equip {
+
+			}
+		}
+	}
 }
 
 impl InternalComponent for InventoryComponent {
 	type ComponentProtocol = InventoryProtocol;
 
 	fn new(_config: &LuNameValue) -> Self {
-		Self {}
+		Self { items: vec![] }
 	}
 
 	fn make_construction(&self) -> InventoryConstruction {
@@ -109,5 +126,12 @@ impl InternalComponent for InventoryComponent {
 			_ => {},
 		}
 		Ok(())
+	}
+
+	fn on_game_message(&mut self, msg: &ServerGM, game_object: &mut GameObject, state: &mut State, conn: &mut Connection) {
+		match msg {
+			ServerGM::EquipInventory(x) => self.on_equip_inventory(x, game_object, state, conn),
+			_ => {}
+		}
 	}
 }
