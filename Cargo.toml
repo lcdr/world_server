@@ -12,7 +12,7 @@ toml = "0.5"
 minreq = { version = "2.1.1", features = ["https"] }
 libsqlite3-sys = { version = "0.20.1", features = ["bundled"] }
 diesel = { version = "1.4.6", features = ["sqlite"] }
-lu_packets = { git = "https://github.com/lcdr/lu_packets", rev = "7f58ae44fb624163dd91adef9a5ada0a2d36e421" }
-lu_packets_derive = { git = "https://github.com/lcdr/lu_packets", rev = "34da323dd9acd829ff00f9c6c4549ce5ad1dceb3" }
-base_server = { git = "https://github.com/lcdr/base_server", rev = "26a3e8f75645f2abaf93434dd45e33c2a58ed0e0", features=[], default-features=false }
+lu_packets = { git = "https://github.com/lcdr/lu_packets", rev = "58e22958eca62e0d2d2d98c5de3052900fff1884" }
+lu_packets_derive = { git = "https://github.com/lcdr/lu_packets", rev = "58e22958eca62e0d2d2d98c5de3052900fff1884" }
+base_server = { git = "https://github.com/lcdr/base_server", rev = "3bb19be48bb39aa9c3793b423cff29963ee14708", features=[], default-features=false }
 rusqlite = "0.24.2"

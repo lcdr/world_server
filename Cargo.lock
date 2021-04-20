@@ -32,7 +32,7 @@ dependencies = [
 [[package]]
 name = "base_server"
 version = "0.1.0"
-source = "git+https://github.com/lcdr/base_server?rev=26a3e8f75645f2abaf93434dd45e33c2a58ed0e0#26a3e8f75645f2abaf93434dd45e33c2a58ed0e0"
+source = "git+https://github.com/lcdr/base_server?rev=3bb19be48bb39aa9c3793b423cff29963ee14708#3bb19be48bb39aa9c3793b423cff29963ee14708"
 dependencies = [
  "endio",
  "lu_packets",
@@ -228,28 +228,18 @@ dependencies = [
 [[package]]
 name = "lu_packets"
 version = "0.1.0"
-source = "git+https://github.com/lcdr/lu_packets?rev=7f58ae44fb624163dd91adef9a5ada0a2d36e421#7f58ae44fb624163dd91adef9a5ada0a2d36e421"
+source = "git+https://github.com/lcdr/lu_packets?rev=58e22958eca62e0d2d2d98c5de3052900fff1884#58e22958eca62e0d2d2d98c5de3052900fff1884"
 dependencies = [
  "endio",
  "endio_bit",
  "flate2",
- "lu_packets_derive 0.1.0 (git+https://github.com/lcdr/lu_packets?rev=7f58ae44fb624163dd91adef9a5ada0a2d36e421)",
+ "lu_packets_derive",
 ]
 
 [[package]]
 name = "lu_packets_derive"
 version = "0.1.0"
-source = "git+https://github.com/lcdr/lu_packets?rev=34da323dd9acd829ff00f9c6c4549ce5ad1dceb3#34da323dd9acd829ff00f9c6c4549ce5ad1dceb3"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn",
-]
-
-[[package]]
-name = "lu_packets_derive"
-version = "0.1.0"
-source = "git+https://github.com/lcdr/lu_packets?rev=7f58ae44fb624163dd91adef9a5ada0a2d36e421#7f58ae44fb624163dd91adef9a5ada0a2d36e421"
+source = "git+https://github.com/lcdr/lu_packets?rev=58e22958eca62e0d2d2d98c5de3052900fff1884#58e22958eca62e0d2d2d98c5de3052900fff1884"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -550,7 +540,7 @@ dependencies = [
  "diesel",
  "libsqlite3-sys",
  "lu_packets",
- "lu_packets_derive 0.1.0 (git+https://github.com/lcdr/lu_packets?rev=34da323dd9acd829ff00f9c6c4549ce5ad1dceb3)",
+ "lu_packets_derive",
  "minreq",
  "rusqlite",
  "serde",

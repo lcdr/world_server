@@ -1,3 +1,4 @@
+mod base_combat_ai;
 mod bbb;
 mod buff;
 mod character;
@@ -28,6 +29,7 @@ use lu_packets::{
 use crate::state::Connection;
 use crate::services::{GameObjectService, GameObjectServiceMut};
 use crate::state::State;
+use self::base_combat_ai::BaseCombatAiComponent;
 use self::bbb::BbbComponent;
 use self::buff::BuffComponent;
 use self::character::CharacterComponent;
@@ -168,6 +170,7 @@ impl GameObject {
 					9  =>  SkillComponent::new_c,
 					17 =>  InventoryComponent::new_c,
 					44 =>  FxComponent::new_c,
+					60 =>  BaseCombatAiComponent::new_c,
 					98 =>  BuffComponent::new_c,
 					106 => PlayerForcedMovementComponent::new_c,
 					107 => BbbComponent::new_c,
