@@ -1,19 +1,32 @@
+use std::io::Result as Res;
+
 use lu_packets::{
-	raknet::client::replica::destroyable::{DestroyableConstruction, DestroyableProtocol, DestroyableSerialization, StatsInfo, StatusImmunityInfo},
+	raknet::client::replica::destroyable::{DestroyableConstruction, DestroyableProtocol, DestroyableSerialization, SerializationStatsInfo, StatsInfo, StatusImmunityInfo},
 	world::LuNameValue,
 };
 
-use super::InternalComponent;
+use super::{GameObject, InternalComponent};
+use crate::services::{GameObjectServiceMut, SetFaction};
+use crate::state::{Connection, State};
 
 pub struct DestroyableComponent {
+	faction: i32,
+}
 
+impl DestroyableComponent {
+	fn set_faction(&mut self, set_faction: &SetFaction) -> Res<()> {
+		self.faction = set_faction.0;
+		Ok(())
+	}
 }
 
 impl InternalComponent for DestroyableComponent {
 	type ComponentProtocol = DestroyableProtocol;
 
 	fn new(_config: &LuNameValue) -> Self {
-		Self {}
+		Self {
+			faction: 1,
+		}
 	}
 
 	fn make_construction(&self) -> DestroyableConstruction {
@@ -43,7 +56,7 @@ impl InternalComponent for DestroyableComponent {
 				actual_max_health: 4.0,
 				actual_max_armor: 0.0,
 				actual_max_imag: 0.0,
-				factions: vec![1].into(),
+				factions: vec![self.faction].into(),
 				is_dead: false,
 				is_smashed: false,
 				smashable_info: None,
@@ -54,8 +67,32 @@ impl InternalComponent for DestroyableComponent {
 
 	fn make_serialization(&self) -> DestroyableSerialization {
 		DestroyableSerialization {
-			serialization_stats_info: None,
+			serialization_stats_info: Some(SerializationStatsInfo {
+				cur_health: 4,
+				max_health: 4.0,
+				cur_armor: 0,
+				max_armor: 0.0,
+				cur_imag: 0,
+				max_imag: 0.0,
+				damage_absorption_points: 0,
+				immunity: true,
+				is_gm_immune: false,
+				is_shielded: false,
+				actual_max_health: 4.0,
+				actual_max_armor: 0.0,
+				actual_max_imag: 0.0,
+				factions: vec![self.faction].into(),
+				is_smashable: false,
+			}),
 			is_on_a_threat_list: None,
+		}
+	}
+
+
+	fn run_service_mut(&mut self, service: &mut GameObjectServiceMut, _game_object: &mut GameObject, _state: &mut State, _conn: &mut Connection) -> Res<()> {
+		match service {
+			GameObjectServiceMut::SetFaction(set_faction) => self.set_faction(set_faction),
+			_ => Ok(()),
 		}
 	}
 }

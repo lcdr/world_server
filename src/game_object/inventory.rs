@@ -10,7 +10,7 @@ use lu_packets::{
 	world::gm::server::{GameMessage as ServerGM, EquipInventory},
 };
 
-use crate::services::GameObjectServiceMut;
+use crate::services::{AddItem, GameObjectServiceMut};
 use crate::state::{Connection, State};
 use super::{GameObject, InternalComponent};
 
@@ -23,7 +23,28 @@ pub struct InventoryComponent {
 }
 
 impl InventoryComponent {
-	fn on_equip_inventory(&mut self, msg: &EquipInventory, game_object: &mut GameObject, state: &mut State, conn: &mut Connection) -> Res<()> {
+	fn add_item(&mut self, add_item: &AddItem, game_object: &mut GameObject, state: &mut State, conn: &mut Connection) -> Res<()> {
+		let add = AddItemToInventoryClientSync {
+			bound: false,
+			is_boe: false,
+			is_bop: false,
+			loot_type_source: LootType::None,
+			extra_info: lnv! {},
+			obj_template: add_item.lot,
+			subkey: 0,
+			inv_type: InventoryType::Default,
+			item_count: 1,
+			items_total: 1,
+			new_obj_id: state.new_spawned_id(),
+			flying_loot_posit: Vector3::default(),
+			show_flying_loot: true,
+			slot_id: 2,
+		};
+		let gm = game_object.make_sgm(add);
+		conn.send(gm)
+	}
+
+	fn on_equip_inventory(&mut self, msg: &EquipInventory, _game_object: &mut GameObject, _state: &mut State, _conn: &mut Connection) -> Res<()> {
 		for item in &self.items {
 			if item.object_id == msg.item_to_equip {
 
@@ -102,31 +123,11 @@ impl InternalComponent for InventoryComponent {
 		Ok(())
 	}
 
-	fn run_service_mut(&mut self, service: &mut GameObjectServiceMut, game_object: &mut GameObject) -> Res<()> {
+	fn run_service_mut(&mut self, service: &mut GameObjectServiceMut, game_object: &mut GameObject, state: &mut State, conn: &mut Connection) -> Res<()> {
 		match service {
-			GameObjectServiceMut::AddItem(add_item) => {
-				let add = AddItemToInventoryClientSync {
-					bound: false,
-					is_boe: false,
-					is_bop: false,
-					loot_type_source: LootType::None,
-					extra_info: lnv! {},
-					obj_template: add_item.lot,
-					subkey: 0,
-					inv_type: InventoryType::Default,
-					item_count: 1,
-					items_total: 1,
-					new_obj_id: add_item.state.new_spawned_id(),
-					flying_loot_posit: Vector3::default(),
-					show_flying_loot: true,
-					slot_id: 2,
-				};
-				let gm = game_object.make_sgm(add);
-				add_item.conn.send(gm)?;
-			},
-			_ => {},
+			GameObjectServiceMut::AddItem(add_item) => self.add_item(add_item, game_object, state, conn),
+			_ => Ok(()),
 		}
-		Ok(())
 	}
 
 	fn on_game_message(&mut self, msg: &ServerGM, game_object: &mut GameObject, state: &mut State, conn: &mut Connection) -> Res<()> {

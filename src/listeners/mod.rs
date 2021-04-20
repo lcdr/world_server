@@ -87,10 +87,8 @@ fn on_subject_game_msg(state: &mut State, msg: &ServerSGM, conn: &mut Connection
 }
 
 fn on_position_update(state: &mut State, msg: &PositionUpdate, acc_info: &AccountInfo, conn: &mut Connection) -> Res<()> {
-	state.with_char(acc_info, |_state, game_object| {
-		game_object.run_service_mut(&msg.frame_stats)?;
-		let ser = game_object.make_serialization();
-		conn.broadcast(ser)
+	state.with_char(acc_info, |state, game_object| {
+		game_object.run_service_mut(&msg.frame_stats, state, conn)
 	})
 }
 

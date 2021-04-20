@@ -7,6 +7,7 @@ use lu_packets::{
 };
 
 use crate::services::{GameObjectService, GameObjectServiceMut};
+use crate::state::{Connection, State};
 use super::{GameObject, InternalComponent};
 
 pub struct ControllablePhysicsComponent {
@@ -16,6 +17,18 @@ pub struct ControllablePhysicsComponent {
 	is_on_rail: bool,
 	linear_velocity: Option<Vector3>,
 	angular_velocity: Option<Vector3>,
+}
+
+impl ControllablePhysicsComponent {
+	fn set_frame_stats(&mut self, frame_stats: &FrameStats) -> Res<()> {
+		self.position = frame_stats.position;
+		self.rotation = frame_stats.rotation;
+		self.is_on_ground = frame_stats.is_on_ground;
+		self.is_on_rail = frame_stats.is_on_rail;
+		self.linear_velocity = frame_stats.linear_velocity;
+		self.angular_velocity = frame_stats.angular_velocity;
+		Ok(())
+	}
 }
 
 impl InternalComponent for ControllablePhysicsComponent {
@@ -92,18 +105,10 @@ impl InternalComponent for ControllablePhysicsComponent {
 		}
 	}
 
-	fn run_service_mut(&mut self, service: &mut GameObjectServiceMut, _game_object: &mut GameObject) -> Res<()> {
+	fn run_service_mut(&mut self, service: &mut GameObjectServiceMut, _game_object: &mut GameObject, _state: &mut State, _conn: &mut Connection) -> Res<()> {
 		match service {
-			GameObjectServiceMut::SetFrameStats(frame_stats) => {
-				self.position = frame_stats.position;
-				self.rotation = frame_stats.rotation;
-				self.is_on_ground = frame_stats.is_on_ground;
-				self.is_on_rail = frame_stats.is_on_rail;
-				self.linear_velocity = frame_stats.linear_velocity;
-				self.angular_velocity = frame_stats.angular_velocity;
-			},
-			_ => {},
+			GameObjectServiceMut::SetFrameStats(frame_stats) => self.set_frame_stats(frame_stats),
+			_ => Ok(()),
 		}
-		Ok(())
 	}
 }

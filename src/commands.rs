@@ -9,12 +9,13 @@ use lu_packets::{
 
 use crate::game_object::GameObject;
 use crate::state::{Connection, State};
-use crate::services::{AddItem, GetPosition, GetRotation};
+use crate::services::{AddItem, GetPosition, GetRotation, SetFaction};
 
 pub fn on_chat_command(state: &mut State, string: &str, sender: &mut GameObject, conn: &mut Connection) {
 	let args: Vec<_> = string.split_whitespace().collect();
 	let command = match &args[0][1..] {
 		"additem"   => add_item_cmd,
+		"faction"   => faction_cmd,
 		"gamestate" => send_gamestate_cmd,
 		"jetpack"   => jetpack_cmd,
 		"uidebug"   => send_uidebug_cmd,
@@ -45,8 +46,17 @@ fn add_item_cmd(state: &mut State, sender: &mut GameObject, conn: &mut Connectio
 		return Ok(());
 	}
 	let lot = args[1].parse().unwrap();
-	let mut add_item = AddItem { lot, state, conn };
-	sender.run_service_mut(&mut add_item)
+	let add_item = AddItem { lot };
+	sender.run_service_mut(&add_item, state, conn)
+}
+
+fn faction_cmd(state: &mut State, sender: &mut GameObject, conn: &mut Connection, args: &Vec<&str>) -> Res<()> {
+	if args.len() != 2 {
+		return Ok(());
+	}
+	let faction = args[1].parse().unwrap();
+	let set_faction = SetFaction(faction);
+	sender.run_service_mut(&set_faction, state, conn)
 }
 
 fn jetpack_cmd(_state: &mut State, sender: &mut GameObject, conn: &mut Connection, _args: &Vec<&str>) -> Res<()> {

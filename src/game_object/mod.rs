@@ -55,7 +55,7 @@ trait InternalComponent {
 	}
 	fn on_game_message(&mut self, _msg: &ServerGM, _game_object: &mut GameObject, _state: &mut State, _conn: &mut Connection) -> Res<()> { Ok(()) }
 	fn run_service(&self, _service: &mut GameObjectService, _game_object: &GameObject) {}
-	fn run_service_mut(&mut self, _service: &mut GameObjectServiceMut, _game_object: &mut GameObject) -> Res<()> { Ok(()) }
+	fn run_service_mut(&mut self, _service: &mut GameObjectServiceMut, _game_object: &mut GameObject, _state: &mut State, _conn: &mut Connection) -> Res<()> { Ok(()) }
 }
 
 trait Component {
@@ -65,7 +65,7 @@ trait Component {
 	fn write_xml(&self, _writer: &mut String) -> std::fmt::Result;
 	fn on_game_message(&mut self, _msg: &ServerGM, _game_object: &mut GameObject, _state: &mut State, _conn: &mut Connection) -> Res<()>;
 	fn run_service(&self, _service: &mut GameObjectService, _game_object: &GameObject);
-	fn run_service_mut(&mut self, _service: &mut GameObjectServiceMut, _game_object: &mut GameObject) -> Res<()>;
+	fn run_service_mut(&mut self, _service: &mut GameObjectServiceMut, _game_object: &mut GameObject, state: &mut State, conn: &mut Connection) -> Res<()>;
 }
 
 impl<I: 'static+InternalComponent> Component for I {
@@ -93,8 +93,8 @@ impl<I: 'static+InternalComponent> Component for I {
 		<I as InternalComponent>::run_service(self, service, game_object)
 	}
 
-	fn run_service_mut(&mut self, service: &mut GameObjectServiceMut, game_object: &mut GameObject) -> Res<()> {
-		<I as InternalComponent>::run_service_mut(self, service, game_object)
+	fn run_service_mut(&mut self, service: &mut GameObjectServiceMut, game_object: &mut GameObject, state: &mut State, conn: &mut Connection) -> Res<()> {
+		<I as InternalComponent>::run_service_mut(self, service, game_object, state, conn)
 	}
 }
 
@@ -282,11 +282,13 @@ impl GameObject {
 		}
 	}
 
-	pub fn run_service_mut<'a, S: Into<GameObjectServiceMut<'a>>>(&mut self, service: S) -> Res<()> {
+	pub fn run_service_mut<'a, S: Into<GameObjectServiceMut<'a>>>(&mut self, service: S, state: &mut State, conn: &mut Connection) -> Res<()> {
 		let mut go_service = service.into();
 
 		self.iter_comps(|game_object, comp| {
-			comp.run_service_mut(&mut go_service, game_object)
-		})
+			comp.run_service_mut(&mut go_service, game_object, state, conn)
+		})?;
+		let ser = self.make_serialization();
+		conn.broadcast(ser)
 	}
 }
